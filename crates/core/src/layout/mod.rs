@@ -66,15 +66,22 @@ fn build_taffy_tree(
     let taffy_style = to_taffy_style(&node.style);
 
     if node.children.is_empty() && node.node_type == NodeType::Text {
-        // Text node — estimate size based on character count
-        let text_len = node.text.trim().len() as f32;
-        let char_width = node.style.font_size * 0.6; // approximate
-        let text_width = text_len * char_width;
-        let text_height = node.style.font_size * node.style.line_height;
+        // Text node — estimate size with proportional character widths
+        let text = node.text.trim();
+        let text_width = measure_text_width(text, node.style.font_size);
+        let line_height = node.style.font_size * node.style.line_height;
+
+        // Wrap text if it exceeds container width
+        let (wrapped_width, wrapped_height) = if text_width > parent_width && parent_width > 0.0 {
+            let lines = (text_width / parent_width).ceil();
+            (parent_width, lines * line_height)
+        } else {
+            (text_width, line_height)
+        };
 
         let mut style = taffy_style;
-        style.min_size.width = Dimension::Length(text_width.min(parent_width));
-        style.size.height = Dimension::Length(text_height);
+        style.min_size.width = Dimension::Length(wrapped_width.min(parent_width));
+        style.size.height = Dimension::Length(wrapped_height);
 
         return tree.new_leaf(style).unwrap();
     }
@@ -83,17 +90,29 @@ fn build_taffy_tree(
     if node.node_type == NodeType::Element {
         let text = collect_direct_text(node);
         if !text.is_empty() && node.children.iter().all(|c| c.node_type == NodeType::Text) {
-            let text_len = text.len() as f32;
-            let char_width = node.style.font_size * 0.6;
-            let text_width = text_len * char_width;
-            let text_height = node.style.font_size * node.style.line_height;
+            let text_width = measure_text_width(&text, node.style.font_size);
+            let line_height = node.style.font_size * node.style.line_height;
+
+            // Determine available width for wrapping
+            let avail_width = match &node.style.width {
+                css::Dimension::Px(w) => *w,
+                css::Dimension::Percent(p) => parent_width * p,
+                css::Dimension::Auto => parent_width,
+            };
+
+            let (wrapped_width, wrapped_height) = if text_width > avail_width && avail_width > 0.0 {
+                let lines = (text_width / avail_width).ceil();
+                (avail_width, lines * line_height)
+            } else {
+                (text_width, line_height)
+            };
 
             let mut style = taffy_style;
             if matches!(style.size.width, Dimension::Auto) {
-                style.min_size.width = Dimension::Length(text_width);
+                style.min_size.width = Dimension::Length(wrapped_width);
             }
             if matches!(style.size.height, Dimension::Auto) {
-                style.min_size.height = Dimension::Length(text_height);
+                style.min_size.height = Dimension::Length(wrapped_height);
             }
 
             return tree.new_leaf(style).unwrap();
@@ -108,6 +127,40 @@ fn build_taffy_tree(
         .collect();
 
     tree.new_with_children(taffy_style, &child_ids).unwrap()
+}
+
+/// Measure text width using proportional character widths.
+/// Based on average character widths in common sans-serif fonts.
+fn measure_text_width(text: &str, font_size: f32) -> f32 {
+    let scale = font_size / 16.0; // normalize to 16px base
+    text.chars()
+        .map(|c| char_width(c) * scale)
+        .sum()
+}
+
+/// Approximate character width in pixels at 16px font size.
+/// Based on Arial/Helvetica metrics.
+fn char_width(c: char) -> f32 {
+    match c {
+        'i' | 'l' | '!' | '|' | '.' | ',' | ':' | ';' | '\'' => 4.0,
+        'I' | 'j' | 'f' | 'r' | 't' => 5.0,
+        ' ' | '(' | ')' | '[' | ']' | '{' | '}' => 5.0,
+        'a' | 'c' | 'e' | 'g' | 'n' | 'o' | 'p' | 's' | 'u' | 'v' | 'x' | 'y' | 'z' => 8.5,
+        'b' | 'd' | 'h' | 'k' | 'q' => 9.0,
+        'w' => 12.0,
+        'm' => 13.0,
+        'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'K' | 'N' | 'O' | 'P' | 'Q'
+        | 'R' | 'S' | 'T' | 'U' | 'V' | 'X' | 'Y' | 'Z' => 10.0,
+        'M' | 'W' => 13.0,
+        '0'..='9' => 8.5,
+        '-' | '_' | '=' | '+' | '~' | '^' => 8.0,
+        '@' => 15.0,
+        '#' | '$' | '%' | '&' | '*' => 10.0,
+        '/' | '\\' | '?' => 6.0,
+        '"' | '`' => 6.0,
+        '<' | '>' => 8.0,
+        _ => 9.6, // default for unknown chars (wide estimate for unicode)
+    }
 }
 
 fn collect_direct_text(node: &StyledNode) -> String {
