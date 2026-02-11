@@ -425,8 +425,13 @@ fn default_style_for_tag(tag: &str) -> LayoutStyle {
         }
 
         // Inline-block elements
-        "button" | "select" | "textarea" => {
+        "button" | "select" => {
             style.display = Display::InlineBlock;
+        }
+        "textarea" => {
+            style.display = Display::InlineBlock;
+            style.width = Dimension::Px(300.0);
+            style.height = Dimension::Px(66.0); // ~3 lines
         }
 
         // Input — inline-block with default size

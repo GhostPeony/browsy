@@ -60,6 +60,9 @@ const TEXT_TAGS: &[&str] = &[
     "figcaption", "blockquote", "pre", "code", "em", "strong", "b", "i", "mark", "small",
 ];
 
+/// Tags that commonly wrap interactive elements (dedup candidates).
+const WRAPPER_TAGS: &[&str] = &["li", "td", "th", "span", "p", "dt", "dd"];
+
 /// Generate the Spatial DOM from a laid-out tree.
 pub fn generate_spatial_dom(
     root: &LayoutNode,
@@ -103,8 +106,6 @@ fn collect_elements(
         || aria_hidden;
 
     if is_hidden {
-        // Still recurse so we don't miss children that might override,
-        // but mark them as hidden too
         for child in &node.children {
             collect_elements(child, els, id_counter, true);
         }
@@ -127,74 +128,198 @@ fn collect_elements(
         || node.attributes.get("tabindex").is_some();
 
     let is_text = TEXT_TAGS.contains(&tag);
-
-    // Elements with role attribute
     let has_role = node.attributes.contains_key("role");
 
-    if is_interactive || is_text || has_role {
-        let text_content = if !node.text_content.is_empty() {
-            node.text_content.clone()
+    // Image with alt text
+    let is_img_with_alt = tag == "img" && node.attributes.contains_key("alt");
+
+    let should_emit = is_interactive || is_text || has_role || is_img_with_alt;
+
+    if should_emit {
+        // Skip text-only elements with trivial content (just punctuation/separators)
+        if is_text && !is_interactive && !has_role {
+            let text_content = if !node.text_content.is_empty() {
+                &node.text_content
+            } else {
+                ""
+            };
+            if is_trivial_text(text_content) {
+                for child in &node.children {
+                    collect_elements(child, els, id_counter, is_hidden);
+                }
+                return;
+            }
+        }
+        // Deduplication: for wrapper tags that only wrap interactive children,
+        // skip the wrapper and let the children carry the text.
+        let has_interactive = has_interactive_descendants(node);
+        let is_wrapper = WRAPPER_TAGS.contains(&tag);
+
+        if is_wrapper && !is_interactive && has_interactive {
+            let own_text = collect_own_text(node);
+            if own_text.is_empty() || is_trivial_text(&own_text) {
+                for child in &node.children {
+                    collect_elements(child, els, id_counter, is_hidden);
+                }
+                return;
+            }
+            emit_element(node, els, id_counter, Some(own_text));
+        } else if is_text && !is_interactive && has_interactive {
+            let own_text = collect_own_text(node);
+            if own_text.is_empty() || is_trivial_text(&own_text) {
+                for child in &node.children {
+                    collect_elements(child, els, id_counter, is_hidden);
+                }
+                return;
+            }
+            emit_element(node, els, id_counter, Some(own_text));
         } else {
-            collect_visible_text(node)
-        };
-        // Use aria-label as text if no visible text
-        let text = if text_content.is_empty() {
-            node.attributes.get("aria-label").cloned()
-        } else {
-            Some(text_content)
-        };
-
-        let role = determine_role(node);
-        let ph = node.attributes.get("placeholder").cloned();
-        let href = node.attributes.get("href").cloned();
-        let val = node.attributes.get("value").cloned();
-        let input_type = if tag == "input" {
-            node.attributes.get("type").cloned()
-        } else {
-            None
-        };
-
-        // ARIA state attributes
-        let disabled = parse_bool_attr(node, "disabled")
-            .or_else(|| parse_bool_attr(node, "aria-disabled"));
-        let checked = parse_bool_attr(node, "checked")
-            .or_else(|| parse_aria_bool(node, "aria-checked"));
-        let expanded = parse_aria_bool(node, "aria-expanded");
-        let selected = parse_bool_attr(node, "selected")
-            .or_else(|| parse_aria_bool(node, "aria-selected"));
-        let required = parse_bool_attr(node, "required")
-            .or_else(|| parse_aria_bool(node, "aria-required"));
-
-        let el = SpatialElement {
-            id: *id_counter,
-            tag: tag.to_string(),
-            role,
-            text,
-            ph,
-            href,
-            val,
-            input_type,
-            disabled,
-            checked,
-            expanded,
-            selected,
-            required,
-            b: [
-                node.bounds.x.round() as i32,
-                node.bounds.y.round() as i32,
-                node.bounds.width.round() as i32,
-                node.bounds.height.round() as i32,
-            ],
-        };
-
-        *id_counter += 1;
-        els.push(el);
+            emit_element(node, els, id_counter, None);
+        }
     }
 
     // Recurse into children
     for child in &node.children {
         collect_elements(child, els, id_counter, is_hidden);
     }
+}
+
+fn emit_element(
+    node: &LayoutNode,
+    els: &mut Vec<SpatialElement>,
+    id_counter: &mut u32,
+    text_override: Option<String>,
+) {
+    let tag = node.tag.as_str();
+
+    let text = if let Some(t) = text_override {
+        if t.is_empty() { None } else { Some(t) }
+    } else if tag == "img" {
+        // Use alt text for images
+        node.attributes.get("alt").cloned().filter(|s| !s.is_empty())
+    } else {
+        let text_content = if !node.text_content.is_empty() {
+            node.text_content.clone()
+        } else {
+            collect_visible_text(node)
+        };
+        if text_content.is_empty() {
+            node.attributes.get("aria-label").cloned()
+        } else {
+            Some(text_content)
+        }
+    };
+
+    let role = determine_role(node);
+    let ph = node.attributes.get("placeholder").cloned();
+    let href = node.attributes.get("href").cloned();
+    let val = node.attributes.get("value").cloned();
+    let input_type = if tag == "input" {
+        node.attributes.get("type").cloned()
+    } else {
+        None
+    };
+
+    let disabled = parse_bool_attr(node, "disabled")
+        .or_else(|| parse_bool_attr(node, "aria-disabled"));
+    let checked = parse_bool_attr(node, "checked")
+        .or_else(|| parse_aria_bool(node, "aria-checked"));
+    let expanded = parse_aria_bool(node, "aria-expanded");
+    let selected = parse_bool_attr(node, "selected")
+        .or_else(|| parse_aria_bool(node, "aria-selected"));
+    let required = parse_bool_attr(node, "required")
+        .or_else(|| parse_aria_bool(node, "aria-required"));
+
+    let el = SpatialElement {
+        id: *id_counter,
+        tag: tag.to_string(),
+        role,
+        text,
+        ph,
+        href,
+        val,
+        input_type,
+        disabled,
+        checked,
+        expanded,
+        selected,
+        required,
+        b: [
+            node.bounds.x.round() as i32,
+            node.bounds.y.round() as i32,
+            node.bounds.width.round() as i32,
+            node.bounds.height.round() as i32,
+        ],
+    };
+
+    *id_counter += 1;
+    els.push(el);
+}
+
+/// Check if a node has any interactive descendants.
+fn has_interactive_descendants(node: &LayoutNode) -> bool {
+    for child in &node.children {
+        let tag = child.tag.as_str();
+        if INTERACTIVE_TAGS.contains(&tag)
+            || child.attributes.contains_key("onclick")
+            || child.attributes.contains_key("role")
+            || child.attributes.get("tabindex").is_some()
+        {
+            return true;
+        }
+        if has_interactive_descendants(child) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Collect text directly owned by this node, NOT from interactive or text-tag descendants.
+/// This gives us text that wouldn't be captured by child elements emitted separately.
+fn collect_own_text(node: &LayoutNode) -> String {
+    let mut result = String::new();
+    // Iterate children (not node itself) so the tag-based skip applies to children only
+    for child in &node.children {
+        collect_own_text_recursive(child, &mut result);
+    }
+    result.trim().to_string()
+}
+
+fn collect_own_text_recursive(node: &LayoutNode, out: &mut String) {
+    if node.node_type == NodeType::Text {
+        let t = node.text.trim();
+        if !t.is_empty() {
+            if !out.is_empty() && !out.ends_with(' ') {
+                out.push(' ');
+            }
+            out.push_str(t);
+        }
+        return;
+    }
+    // Skip children that will be emitted as their own elements
+    let tag = node.tag.as_str();
+    if INTERACTIVE_TAGS.contains(&tag)
+        || TEXT_TAGS.contains(&tag)
+        || node.attributes.contains_key("onclick")
+        || node.attributes.contains_key("role")
+        || node.attributes.get("tabindex").is_some()
+    {
+        return;
+    }
+    for child in &node.children {
+        collect_own_text_recursive(child, out);
+    }
+}
+
+/// Check if text is trivial (only punctuation, separators, or whitespace).
+/// These elements add noise without conveying meaningful content.
+fn is_trivial_text(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    // Skip if all chars are just separators/punctuation
+    trimmed.chars().all(|c| matches!(c, '|' | '·' | '•' | '-' | '–' | '—' | '/' | '\\' | ',' | '.' | ':' | ';' | '(' | ')' | '[' | ']' | '{' | '}' | ' ' | '\t' | '\n'))
 }
 
 fn collect_visible_text(node: &LayoutNode) -> String {

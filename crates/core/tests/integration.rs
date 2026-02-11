@@ -545,7 +545,8 @@ fn test_table_layout() {
     assert_eq!(ths.len(), 3, "Should find 3 table headers");
 
     let tds: Vec<_> = dom.els.iter().filter(|e| e.tag == "td").collect();
-    assert_eq!(tds.len(), 6, "Should find 6 table cells");
+    // 4 text-only cells; 2 cells with interactive children are deduped
+    assert_eq!(tds.len(), 4, "Should find 4 text-only table cells (interactive wrappers deduped)");
 
     assert!(dom.els.iter().any(|e| e.text.as_deref() == Some("Buy")));
     assert!(dom.els.iter().any(|e| e.href.as_deref() == Some("/buy/b")));
