@@ -160,6 +160,9 @@ impl Session {
         );
         spatial.url = url.to_string();
 
+        // Resolve relative URLs
+        crate::output::resolve_urls(&mut spatial, url);
+
         // Shift previous DOM
         self.previous_dom = self.current_dom.take();
         self.current_dom = Some(spatial);
@@ -506,6 +509,7 @@ pub fn fetch(url: &str, config: &FetchConfig) -> Result<SpatialDom, FetchError> 
         config.viewport_height,
     );
     spatial.url = url.to_string();
+    crate::output::resolve_urls(&mut spatial, url);
     Ok(spatial)
 }
 

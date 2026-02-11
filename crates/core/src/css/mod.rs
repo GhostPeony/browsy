@@ -516,98 +516,98 @@ fn parse_inline_style(style_str: &str, style: &mut LayoutStyle) {
                 };
             }
             "width" => {
-                if let Some(dim) = parse_dimension_value(value) {
+                if let Some(dim) = parse_dimension_value_with_context(value, style.font_size) {
                     style.width = dim;
                 }
             }
             "height" => {
-                if let Some(dim) = parse_dimension_value(value) {
+                if let Some(dim) = parse_dimension_value_with_context(value, style.font_size) {
                     style.height = dim;
                 }
             }
             "min-width" => {
-                if let Some(dim) = parse_dimension_value(value) {
+                if let Some(dim) = parse_dimension_value_with_context(value, style.font_size) {
                     style.min_width = dim;
                 }
             }
             "min-height" => {
-                if let Some(dim) = parse_dimension_value(value) {
+                if let Some(dim) = parse_dimension_value_with_context(value, style.font_size) {
                     style.min_height = dim;
                 }
             }
             "max-width" => {
-                if let Some(dim) = parse_dimension_value(value) {
+                if let Some(dim) = parse_dimension_value_with_context(value, style.font_size) {
                     style.max_width = dim;
                 }
             }
             "max-height" => {
-                if let Some(dim) = parse_dimension_value(value) {
+                if let Some(dim) = parse_dimension_value_with_context(value, style.font_size) {
                     style.max_height = dim;
                 }
             }
             "margin" => {
-                style.margin = parse_edges(value);
+                style.margin = parse_edges_with_context(value, style.font_size);
             }
             "margin-top" => {
-                if let Some(v) = parse_px(value) {
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.margin.top = v;
                 }
             }
             "margin-right" => {
-                if let Some(v) = parse_px(value) {
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.margin.right = v;
                 }
             }
             "margin-bottom" => {
-                if let Some(v) = parse_px(value) {
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.margin.bottom = v;
                 }
             }
             "margin-left" => {
-                if let Some(v) = parse_px(value) {
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.margin.left = v;
                 }
             }
             "padding" => {
-                style.padding = parse_edges(value);
+                style.padding = parse_edges_with_context(value, style.font_size);
             }
             "padding-top" => {
-                if let Some(v) = parse_px(value) {
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.padding.top = v;
                 }
             }
             "padding-right" => {
-                if let Some(v) = parse_px(value) {
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.padding.right = v;
                 }
             }
             "padding-bottom" => {
-                if let Some(v) = parse_px(value) {
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.padding.bottom = v;
                 }
             }
             "padding-left" => {
-                if let Some(v) = parse_px(value) {
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.padding.left = v;
                 }
             }
             "top" => {
-                if let Some(dim) = parse_dimension_value(value) {
+                if let Some(dim) = parse_dimension_value_with_context(value, style.font_size) {
                     style.top = dim;
                 }
             }
             "right" => {
-                if let Some(dim) = parse_dimension_value(value) {
+                if let Some(dim) = parse_dimension_value_with_context(value, style.font_size) {
                     style.right = dim;
                 }
             }
             "bottom" => {
-                if let Some(dim) = parse_dimension_value(value) {
+                if let Some(dim) = parse_dimension_value_with_context(value, style.font_size) {
                     style.bottom = dim;
                 }
             }
             "left" => {
-                if let Some(dim) = parse_dimension_value(value) {
+                if let Some(dim) = parse_dimension_value_with_context(value, style.font_size) {
                     style.left = dim;
                 }
             }
@@ -637,7 +637,7 @@ fn parse_inline_style(style_str: &str, style: &mut LayoutStyle) {
                 }
             }
             "flex-basis" => {
-                if let Some(dim) = parse_dimension_value(value) {
+                if let Some(dim) = parse_dimension_value_with_context(value, style.font_size) {
                     style.flex_basis = dim;
                 }
             }
@@ -671,19 +671,20 @@ fn parse_inline_style(style_str: &str, style: &mut LayoutStyle) {
                 };
             }
             "gap" => {
-                if let Some(v) = parse_px(value) {
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.gap = v;
                 }
             }
             "font-size" => {
-                if let Some(v) = parse_px(value) {
+                // For font-size, em is relative to the inherited (parent) font-size
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.font_size = v;
                 }
             }
             "line-height" => {
                 if let Ok(v) = value.parse::<f32>() {
                     style.line_height = v;
-                } else if let Some(v) = parse_px(value) {
+                } else if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.line_height = v / style.font_size;
                 }
             }
@@ -711,22 +712,22 @@ fn parse_inline_style(style_str: &str, style: &mut LayoutStyle) {
                 style.border_width = parse_edges(value);
             }
             "border-top-width" => {
-                if let Some(v) = parse_px(value) {
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.border_width.top = v;
                 }
             }
             "border-right-width" => {
-                if let Some(v) = parse_px(value) {
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.border_width.right = v;
                 }
             }
             "border-bottom-width" => {
-                if let Some(v) = parse_px(value) {
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.border_width.bottom = v;
                 }
             }
             "border-left-width" => {
-                if let Some(v) = parse_px(value) {
+                if let Some(v) = parse_px_with_context(value, style.font_size) {
                     style.border_width.left = v;
                 }
             }
@@ -837,6 +838,10 @@ fn extract_border_width(value: &str) -> Option<f32> {
 }
 
 fn parse_dimension_value(value: &str) -> Option<Dimension> {
+    parse_dimension_value_with_context(value, ROOT_FONT_SIZE)
+}
+
+fn parse_dimension_value_with_context(value: &str, em_base: f32) -> Option<Dimension> {
     let value = value.trim();
     if value == "auto" {
         return Some(Dimension::Auto);
@@ -845,14 +850,21 @@ fn parse_dimension_value(value: &str) -> Option<Dimension> {
         let num = value.trim_end_matches('%').trim().parse::<f32>().ok()?;
         return Some(Dimension::Percent(num / 100.0));
     }
-    if let Some(px) = parse_px(value) {
+    if let Some(px) = parse_px_with_context(value, em_base) {
         return Some(Dimension::Px(px));
     }
     // Try bare number (treated as px)
     value.parse::<f32>().ok().map(Dimension::Px)
 }
 
+/// Root font size for rem calculations (browser default).
+const ROOT_FONT_SIZE: f32 = 16.0;
+
 fn parse_px(value: &str) -> Option<f32> {
+    parse_px_with_context(value, ROOT_FONT_SIZE)
+}
+
+fn parse_px_with_context(value: &str, em_base: f32) -> Option<f32> {
     let value = value.trim();
     if value == "0" {
         return Some(0.0);
@@ -860,30 +872,35 @@ fn parse_px(value: &str) -> Option<f32> {
     if value.ends_with("px") {
         return value.trim_end_matches("px").trim().parse().ok();
     }
-    if value.ends_with("em") {
-        // Approximate: 1em = 16px
+    // em is relative to the current element's font-size (or parent's for font-size property)
+    if value.ends_with("em") && !value.ends_with("rem") {
         return value
             .trim_end_matches("em")
             .trim()
             .parse::<f32>()
             .ok()
-            .map(|v| v * 16.0);
+            .map(|v| v * em_base);
     }
+    // rem is always relative to root font-size (16px)
     if value.ends_with("rem") {
         return value
             .trim_end_matches("rem")
             .trim()
             .parse::<f32>()
             .ok()
-            .map(|v| v * 16.0);
+            .map(|v| v * ROOT_FONT_SIZE);
     }
     None
 }
 
 fn parse_edges(value: &str) -> Edges {
+    parse_edges_with_context(value, ROOT_FONT_SIZE)
+}
+
+fn parse_edges_with_context(value: &str, em_base: f32) -> Edges {
     let parts: Vec<f32> = value
         .split_whitespace()
-        .filter_map(|v| parse_px(v))
+        .filter_map(|v| parse_px_with_context(v, em_base))
         .collect();
 
     match parts.len() {

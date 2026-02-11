@@ -907,7 +907,7 @@ fn test_session_load_html() {
     // Verify elements
     assert!(dom.els.iter().any(|e| e.text.as_deref() == Some("Hello World")));
     assert!(dom.els.iter().any(|e| e.text.as_deref() == Some("Click Me")));
-    assert!(dom.els.iter().any(|e| e.href.as_deref() == Some("/about")));
+    assert!(dom.els.iter().any(|e| e.href.as_deref() == Some("http://localhost/about")));
 }
 
 #[test]
@@ -1298,4 +1298,66 @@ fn test_session_js_click_toggle() {
         dom.els.iter().any(|e| e.href.as_deref() == Some("/profile")),
         "Profile link should be visible after toggle"
     );
+}
+
+#[test]
+fn test_url_resolution() {
+    let html = r##"
+    <html><body>
+        <a href="/about">About</a>
+        <a href="page.html">Page</a>
+        <a href="../up">Up</a>
+        <a href="https://example.com">External</a>
+        <a href="mailto:test@example.com">Email</a>
+        <a href="#section">Anchor</a>
+        <a href="javascript:void(0)">JS</a>
+    </body></html>
+    "##;
+
+    let mut dom = browsy_core::parse(html, 1920.0, 1080.0);
+    output::resolve_urls(&mut dom, "https://mysite.com/blog/post");
+
+    let hrefs: Vec<Option<&str>> = dom.els.iter()
+        .filter(|e| e.role.as_deref() == Some("link"))
+        .map(|e| e.href.as_deref())
+        .collect();
+
+    // Relative URLs resolved
+    assert!(hrefs.contains(&Some("https://mysite.com/about")));
+    assert!(hrefs.contains(&Some("https://mysite.com/blog/page.html")));
+    assert!(hrefs.contains(&Some("https://mysite.com/up")));
+
+    // Absolute/special URLs unchanged
+    assert!(hrefs.contains(&Some("https://example.com")));  // already absolute
+    assert!(hrefs.contains(&Some("mailto:test@example.com")));  // special scheme
+    assert!(hrefs.contains(&Some("#section")));  // fragment
+    assert!(hrefs.contains(&Some("javascript:void(0)")));  // js
+}
+
+#[test]
+fn test_label_input_association() {
+    let html = r#"
+    <html><body>
+        <form>
+            <label for="email">Email Address</label>
+            <input type="email" id="email" placeholder="you@example.com">
+
+            <label for="pass">Password</label>
+            <input type="password" id="pass">
+
+            <input type="text" id="nolabel" placeholder="No label">
+        </form>
+    </body></html>
+    "#;
+
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
+
+    let email_input = dom.els.iter().find(|e| e.ph.as_deref() == Some("you@example.com")).unwrap();
+    assert_eq!(email_input.label.as_deref(), Some("Email Address"));
+
+    let pass_input = dom.els.iter().find(|e| e.input_type.as_deref() == Some("password")).unwrap();
+    assert_eq!(pass_input.label.as_deref(), Some("Password"));
+
+    let nolabel_input = dom.els.iter().find(|e| e.ph.as_deref() == Some("No label")).unwrap();
+    assert_eq!(nolabel_input.label, None);
 }

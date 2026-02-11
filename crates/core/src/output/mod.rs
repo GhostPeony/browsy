@@ -45,6 +45,9 @@ pub struct SpatialElement {
     /// ARIA: whether required
     #[serde(skip_serializing_if = "Option::is_none")]
     pub required: Option<bool>,
+    /// Associated label text (from <label for="id">)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
     /// Bounds: [x, y, width, height]
     pub b: [i32; 4],
 }
@@ -72,7 +75,10 @@ pub fn generate_spatial_dom(
     let mut els = Vec::new();
     let mut id_counter = 1u32;
 
-    collect_elements(root, &mut els, &mut id_counter, false);
+    // Collect label associations: HTML id -> label text
+    let label_map = collect_label_associations(root);
+
+    collect_elements(root, &mut els, &mut id_counter, false, &label_map);
 
     // Extract title from the tree
     let title = find_title(root).unwrap_or_default();
@@ -86,11 +92,66 @@ pub fn generate_spatial_dom(
     }
 }
 
+/// Walk the tree to find <label for="xxx"> elements and map input IDs to label text.
+fn collect_label_associations(root: &LayoutNode) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    collect_labels_recursive(root, &mut map);
+    map
+}
+
+fn collect_labels_recursive(node: &LayoutNode, map: &mut std::collections::HashMap<String, String>) {
+    if node.tag == "label" {
+        if let Some(for_id) = node.attributes.get("for") {
+            let text = if !node.text_content.is_empty() {
+                node.text_content.clone()
+            } else {
+                collect_visible_text(node)
+            };
+            if !text.is_empty() {
+                map.insert(for_id.clone(), text);
+            }
+        }
+    }
+    for child in &node.children {
+        collect_labels_recursive(child, map);
+    }
+}
+
+/// Resolve all relative URLs in the SpatialDom against a base URL.
+pub fn resolve_urls(dom: &mut SpatialDom, base_url: &str) {
+    // Try to parse base URL; if invalid, skip resolution
+    let base = match url::Url::parse(base_url) {
+        Ok(u) => u,
+        Err(_) => return,
+    };
+
+    for el in &mut dom.els {
+        if let Some(ref href) = el.href {
+            // Skip already-absolute URLs, javascript:, mailto:, tel:, data:, #anchors
+            if href.starts_with("http://")
+                || href.starts_with("https://")
+                || href.starts_with("javascript:")
+                || href.starts_with("mailto:")
+                || href.starts_with("tel:")
+                || href.starts_with("data:")
+                || href.starts_with('#')
+            {
+                continue;
+            }
+            // Resolve relative URL
+            if let Ok(resolved) = base.join(href) {
+                el.href = Some(resolved.to_string());
+            }
+        }
+    }
+}
+
 fn collect_elements(
     node: &LayoutNode,
     els: &mut Vec<SpatialElement>,
     id_counter: &mut u32,
     parent_hidden: bool,
+    label_map: &std::collections::HashMap<String, String>,
 ) {
     // aria-hidden="true" hides the element and all children
     let aria_hidden = node
@@ -107,7 +168,7 @@ fn collect_elements(
 
     if is_hidden {
         for child in &node.children {
-            collect_elements(child, els, id_counter, true);
+            collect_elements(child, els, id_counter, true, label_map);
         }
         return;
     }
@@ -116,7 +177,7 @@ fn collect_elements(
     if node.bounds.width <= 0.0 && node.bounds.height <= 0.0 && node.node_type == NodeType::Element
     {
         for child in &node.children {
-            collect_elements(child, els, id_counter, is_hidden);
+            collect_elements(child, els, id_counter, is_hidden, label_map);
         }
         return;
     }
@@ -145,7 +206,7 @@ fn collect_elements(
             };
             if is_trivial_text(text_content) {
                 for child in &node.children {
-                    collect_elements(child, els, id_counter, is_hidden);
+                    collect_elements(child, els, id_counter, is_hidden, label_map);
                 }
                 return;
             }
@@ -159,28 +220,28 @@ fn collect_elements(
             let own_text = collect_own_text(node);
             if own_text.is_empty() || is_trivial_text(&own_text) {
                 for child in &node.children {
-                    collect_elements(child, els, id_counter, is_hidden);
+                    collect_elements(child, els, id_counter, is_hidden, label_map);
                 }
                 return;
             }
-            emit_element(node, els, id_counter, Some(own_text));
+            emit_element(node, els, id_counter, Some(own_text), label_map);
         } else if is_text && !is_interactive && has_interactive {
             let own_text = collect_own_text(node);
             if own_text.is_empty() || is_trivial_text(&own_text) {
                 for child in &node.children {
-                    collect_elements(child, els, id_counter, is_hidden);
+                    collect_elements(child, els, id_counter, is_hidden, label_map);
                 }
                 return;
             }
-            emit_element(node, els, id_counter, Some(own_text));
+            emit_element(node, els, id_counter, Some(own_text), label_map);
         } else {
-            emit_element(node, els, id_counter, None);
+            emit_element(node, els, id_counter, None, label_map);
         }
     }
 
     // Recurse into children
     for child in &node.children {
-        collect_elements(child, els, id_counter, is_hidden);
+        collect_elements(child, els, id_counter, is_hidden, label_map);
     }
 }
 
@@ -189,6 +250,7 @@ fn emit_element(
     els: &mut Vec<SpatialElement>,
     id_counter: &mut u32,
     text_override: Option<String>,
+    label_map: &std::collections::HashMap<String, String>,
 ) {
     let tag = node.tag.as_str();
 
@@ -230,6 +292,15 @@ fn emit_element(
     let required = parse_bool_attr(node, "required")
         .or_else(|| parse_aria_bool(node, "aria-required"));
 
+    // Associate label via <label for="id">
+    let label = if matches!(tag, "input" | "select" | "textarea") {
+        node.attributes.get("id")
+            .and_then(|id| label_map.get(id))
+            .cloned()
+    } else {
+        None
+    };
+
     let el = SpatialElement {
         id: *id_counter,
         tag: tag.to_string(),
@@ -244,6 +315,7 @@ fn emit_element(
         expanded,
         selected,
         required,
+        label,
         b: [
             node.bounds.x.round() as i32,
             node.bounds.y.round() as i32,
