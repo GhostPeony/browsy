@@ -430,3 +430,52 @@ fn is_private_ipv6(ip: Ipv6Addr) -> bool {
         || (first & 0xffc0) == 0xfe80
         || (first & 0xff00) == 0xff00
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{extract_forms, find_form_index_for_button};
+    use crate::dom::parse_html;
+
+    #[test]
+    fn test_find_form_index_by_button_text() {
+        let html = r#"
+        <html><body>
+            <form action="/a">
+                <input type="text" name="username" />
+                <button>Save A</button>
+            </form>
+            <form action="/b">
+                <input type="text" name="username" />
+                <button>Save B</button>
+            </form>
+        </body></html>
+        "#;
+
+        let dom = parse_html(html);
+        let forms = extract_forms(&dom);
+        let idx = find_form_index_for_button(&forms, None, Some("Save B"));
+        assert_eq!(idx, 1);
+    }
+
+    #[test]
+    fn test_extract_forms_scopes_fields() {
+        let html = r#"
+        <html><body>
+            <form action="/a">
+                <input type="text" name="first" value="one" />
+            </form>
+            <form action="/b">
+                <input type="text" name="second" value="two" />
+            </form>
+        </body></html>
+        "#;
+
+        let dom = parse_html(html);
+        let forms = extract_forms(&dom);
+        assert_eq!(forms.len(), 2);
+        assert_eq!(forms[0].fields.len(), 1);
+        assert_eq!(forms[0].fields[0].name.as_deref(), Some("first"));
+        assert_eq!(forms[1].fields.len(), 1);
+        assert_eq!(forms[1].fields[0].name.as_deref(), Some("second"));
+    }
+}
