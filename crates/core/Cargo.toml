@@ -1,9 +1,9 @@
 [package]
-name = "agentbrowser-core"
+name = "browsy-core"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Zero-render browser engine for AI agents"
+description = "Zero-render browser engine for AI agents — browsy.dev"
 
 [dependencies]
 html5ever = "0.36"

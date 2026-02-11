@@ -8,7 +8,7 @@ pub mod fetch;
 use output::SpatialDom;
 
 /// Parse an HTML string and compute the Spatial DOM.
-/// This is the primary entry point for agentbrowser-core.
+/// This is the primary entry point for browsy-core.
 pub fn parse(html: &str, viewport_width: f32, viewport_height: f32) -> SpatialDom {
     let dom_tree = dom::parse_html(html);
     let styled = css::compute_styles(&dom_tree);

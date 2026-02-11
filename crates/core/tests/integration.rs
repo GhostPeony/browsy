@@ -1,6 +1,6 @@
-use agentbrowser_core::output;
+use browsy_core::output;
 #[cfg(feature = "fetch")]
-use agentbrowser_core::fetch;
+use browsy_core::fetch;
 
 #[test]
 fn test_login_page_spatial_dom() {
@@ -25,7 +25,7 @@ fn test_login_page_spatial_dom() {
     </html>
     "#;
 
-    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
 
     // Should have elements
     assert!(!dom.els.is_empty(), "Should find interactive/text elements");
@@ -100,7 +100,7 @@ fn test_flex_layout_positioning() {
     </html>
     "#;
 
-    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
 
     let buttons: Vec<_> = dom.els.iter().filter(|e| e.tag == "button").collect();
     assert_eq!(buttons.len(), 3, "Should find 3 buttons");
@@ -140,7 +140,7 @@ fn test_display_none_hidden() {
     </html>
     "#;
 
-    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
 
     // Debug: print what we got
     println!("\n=== Display None Test ===");
@@ -163,10 +163,10 @@ fn test_display_none_hidden() {
 fn test_viewport_size() {
     let html = "<html><body><button>Click</button></body></html>";
 
-    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
     assert_eq!(dom.vp, [1920.0, 1080.0]);
 
-    let dom2 = agentbrowser_core::parse(html, 1280.0, 720.0);
+    let dom2 = browsy_core::parse(html, 1280.0, 720.0);
     assert_eq!(dom2.vp, [1280.0, 720.0]);
 }
 
@@ -219,7 +219,7 @@ fn test_css_style_tag_selectors() {
     </html>
     "#;
 
-    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
 
     println!("\n=== CSS Selector Test ===");
     let compact = output::to_compact_string(&dom);
@@ -278,7 +278,7 @@ fn test_font_size_inheritance() {
     </html>
     "#;
 
-    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
 
     println!("\n=== Font Size Inheritance Test ===");
     for el in &dom.els {
@@ -340,7 +340,7 @@ fn test_ecommerce_product_card() {
     </html>
     "#;
 
-    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
     let compact = output::to_compact_string(&dom);
 
     println!("\n=== E-commerce Card ===");
@@ -393,7 +393,7 @@ fn test_navigation_with_dropdown() {
     </html>
     "#;
 
-    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
     let compact = output::to_compact_string(&dom);
 
     println!("\n=== Navigation Test ===");
@@ -457,7 +457,7 @@ fn test_form_with_labels_and_validation() {
     </html>
     "#;
 
-    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
     let compact = output::to_compact_string(&dom);
 
     println!("\n=== Form Test ===");
@@ -532,7 +532,7 @@ fn test_table_layout() {
     </html>
     "#;
 
-    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
     let compact = output::to_compact_string(&dom);
 
     println!("\n=== Table Test ===");
@@ -579,7 +579,7 @@ fn test_percentage_widths() {
     </html>
     "#;
 
-    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
     let compact = output::to_compact_string(&dom);
 
     println!("\n=== Percentage Width Test ===");
@@ -626,8 +626,8 @@ fn test_delta_output() {
     </body></html>
     "#;
 
-    let dom1 = agentbrowser_core::parse(page1, 1920.0, 1080.0);
-    let dom2 = agentbrowser_core::parse(page2, 1920.0, 1080.0);
+    let dom1 = browsy_core::parse(page1, 1920.0, 1080.0);
+    let dom2 = browsy_core::parse(page2, 1920.0, 1080.0);
 
     let delta = output::diff(&dom1, &dom2);
 
@@ -668,7 +668,7 @@ fn test_delta_output() {
     </body></html>
     "#;
 
-    let dom3 = agentbrowser_core::parse(page3, 1920.0, 1080.0);
+    let dom3 = browsy_core::parse(page3, 1920.0, 1080.0);
     let delta2 = output::diff(&dom2, &dom3);
 
     println!("\n=== Minimal Delta ===");
