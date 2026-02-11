@@ -1,4 +1,5 @@
 use browsy_core::output;
+use browsy_core::js;
 #[cfg(feature = "fetch")]
 use browsy_core::fetch;
 #[cfg(feature = "fetch")]
@@ -1062,4 +1063,239 @@ fn test_session_real_navigation() {
 
     // Should have a heading
     assert!(dom.els.iter().any(|e| e.tag == "h1"));
+}
+
+#[test]
+fn test_js_detect_onclick_toggle() {
+    let html = r#"
+    <html><body>
+        <button onclick="document.getElementById('menu').style.display = 'block'">Open Menu</button>
+        <div id="menu" style="display: none;">
+            <a href="/profile">Profile</a>
+            <a href="/settings">Settings</a>
+        </div>
+    </body></html>
+    "#;
+
+    let dom_tree = browsy_core::dom::parse_html(html);
+    let behaviors = js::detect_behaviors(&dom_tree);
+
+    assert!(!behaviors.is_empty(), "Should detect onclick behavior");
+    let first = &behaviors[0];
+    match &first.action {
+        js::JsAction::ToggleVisibility { target } => {
+            assert_eq!(target, "#menu");
+        }
+        other => panic!("Expected ToggleVisibility, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_js_apply_toggle_visibility() {
+    let html = r#"
+    <html><body>
+        <button onclick="toggle('dropdown')">Toggle</button>
+        <div id="dropdown" style="display: none;">
+            <a href="/a">Option A</a>
+            <a href="/b">Option B</a>
+        </div>
+    </body></html>
+    "#;
+
+    // Before toggle: dropdown hidden
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
+    assert!(
+        dom.els.iter().find(|e| e.href.as_deref() == Some("/a")).is_none(),
+        "Options should be hidden before toggle"
+    );
+
+    // Apply toggle
+    let dom_tree = browsy_core::dom::parse_html(html);
+    let action = js::JsAction::ToggleVisibility {
+        target: "#dropdown".to_string(),
+    };
+    let modified = js::apply_action(&dom_tree, &action);
+
+    // Re-parse the modified DOM
+    let styled = browsy_core::css::compute_styles(&modified);
+    let laid_out = browsy_core::layout::compute_layout(&styled, 1920.0, 1080.0);
+    let dom2 = browsy_core::output::generate_spatial_dom(&laid_out, 1920.0, 1080.0);
+
+    // After toggle: dropdown visible
+    assert!(
+        dom2.els.iter().any(|e| e.href.as_deref() == Some("/a")),
+        "Option A should be visible after toggle"
+    );
+    assert!(
+        dom2.els.iter().any(|e| e.href.as_deref() == Some("/b")),
+        "Option B should be visible after toggle"
+    );
+}
+
+#[test]
+fn test_js_class_toggle() {
+    let html = r#"
+    <html>
+    <head><style>.hidden { display: none; }</style></head>
+    <body>
+        <button onclick="document.getElementById('panel').classList.toggle('hidden')">Toggle Panel</button>
+        <div id="panel" class="hidden">
+            <p>Panel content</p>
+        </div>
+    </body></html>
+    "#;
+
+    let dom_tree = browsy_core::dom::parse_html(html);
+    let behaviors = js::detect_behaviors(&dom_tree);
+
+    assert!(!behaviors.is_empty(), "Should detect class toggle");
+    match &behaviors[0].action {
+        js::JsAction::ToggleClass { target, class } => {
+            assert_eq!(target, "#panel");
+            assert_eq!(class, "hidden");
+        }
+        other => panic!("Expected ToggleClass, got {:?}", other),
+    }
+
+    // Apply the class toggle
+    let action = &behaviors[0].action;
+    let modified = js::apply_action(&dom_tree, action);
+
+    // Panel should no longer have 'hidden' class
+    fn find_panel(node: &browsy_core::dom::DomNode) -> Option<String> {
+        if node.get_attr("id") == Some("panel") {
+            return node.get_attr("class").map(|s| s.to_string());
+        }
+        for child in &node.children {
+            if let Some(class) = find_panel(child) {
+                return Some(class);
+            }
+        }
+        None
+    }
+
+    let panel_class = find_panel(&modified).unwrap_or_default();
+    assert!(
+        !panel_class.contains("hidden"),
+        "Panel should no longer have 'hidden' class, got '{}'",
+        panel_class
+    );
+}
+
+#[test]
+fn test_js_data_toggle_bootstrap() {
+    let html = r##"
+    <html><body>
+        <button data-toggle="collapse" data-target="#navbar">Menu</button>
+        <div id="navbar" style="display: none;">
+            <a href="/home">Home</a>
+        </div>
+    </body></html>
+    "##;
+
+    let dom_tree = browsy_core::dom::parse_html(html);
+    let behaviors = js::detect_behaviors(&dom_tree);
+
+    assert!(!behaviors.is_empty(), "Should detect Bootstrap data-toggle");
+    match &behaviors[0].action {
+        js::JsAction::ToggleVisibility { target } => {
+            assert_eq!(target, "#navbar");
+        }
+        other => panic!("Expected ToggleVisibility, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_js_aria_controls() {
+    let html = r#"
+    <html><body>
+        <button aria-expanded="false" aria-controls="details-panel">Show Details</button>
+        <div id="details-panel" style="display: none;">
+            <p>Detailed information here</p>
+        </div>
+    </body></html>
+    "#;
+
+    let dom_tree = browsy_core::dom::parse_html(html);
+    let behaviors = js::detect_behaviors(&dom_tree);
+
+    assert!(!behaviors.is_empty(), "Should detect aria-controls toggle");
+    match &behaviors[0].action {
+        js::JsAction::ToggleVisibility { target } => {
+            assert_eq!(target, "#details-panel");
+        }
+        other => panic!("Expected ToggleVisibility, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_js_tab_detection() {
+    let html = r#"
+    <html><body>
+        <div role="tablist">
+            <button role="tab" aria-controls="tab1-panel" aria-selected="true">Tab 1</button>
+            <button role="tab" aria-controls="tab2-panel" aria-selected="false">Tab 2</button>
+        </div>
+        <div id="tab1-panel" role="tabpanel">
+            <p>Content for tab 1</p>
+        </div>
+        <div id="tab2-panel" role="tabpanel" style="display: none;">
+            <p>Content for tab 2</p>
+        </div>
+    </body></html>
+    "#;
+
+    let dom_tree = browsy_core::dom::parse_html(html);
+
+    // Detect tab groups
+    let tab_groups = js::detect_tab_groups(&dom_tree);
+    assert_eq!(tab_groups.len(), 1, "Should find 1 tab group");
+    assert_eq!(tab_groups[0].tabs.len(), 2, "Should find 2 tabs");
+    assert_eq!(tab_groups[0].tabs[0].label, "Tab 1");
+    assert!(tab_groups[0].tabs[0].selected);
+    assert!(!tab_groups[0].tabs[1].selected);
+
+    // Detect tab switch behaviors
+    let behaviors = js::detect_behaviors(&dom_tree);
+    let tab_behaviors: Vec<_> = behaviors.iter()
+        .filter(|b| matches!(&b.action, js::JsAction::TabSwitch { .. }))
+        .collect();
+    assert_eq!(tab_behaviors.len(), 2, "Should detect 2 tab switch behaviors");
+}
+
+#[test]
+#[cfg(feature = "fetch")]
+fn test_session_js_click_toggle() {
+    let mut session = Session::new().unwrap();
+
+    let html = r#"
+    <html><body>
+        <button onclick="document.getElementById('menu').style.display = 'block'">Open</button>
+        <div id="menu" style="display: none;">
+            <a href="/profile">Profile</a>
+        </div>
+    </body></html>
+    "#;
+
+    session.load_html(html, "http://localhost").unwrap();
+
+    // Menu should be hidden initially
+    let dom = session.dom().unwrap();
+    assert!(
+        dom.els.iter().find(|e| e.href.as_deref() == Some("/profile")).is_none(),
+        "Profile link should be hidden initially"
+    );
+
+    // Click the toggle button
+    let btn = session.find_by_role("button");
+    assert!(!btn.is_empty(), "Should find toggle button");
+    let btn_id = btn[0].id;
+    session.click(btn_id).unwrap();
+
+    // Menu should now be visible
+    let dom = session.dom().unwrap();
+    assert!(
+        dom.els.iter().any(|e| e.href.as_deref() == Some("/profile")),
+        "Profile link should be visible after toggle"
+    );
 }

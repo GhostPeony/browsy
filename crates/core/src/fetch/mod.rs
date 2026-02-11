@@ -169,6 +169,28 @@ impl Session {
         Ok(self.current_dom.as_ref().unwrap())
     }
 
+    /// Load from a pre-parsed DOM tree (used after JS actions modify the DOM).
+    fn load_html_from_dom(&mut self, dom_tree: crate::dom::DomNode, url: &str) -> Result<&SpatialDom, FetchError> {
+        let styled = crate::css::compute_styles(&dom_tree);
+        let laid_out = crate::layout::compute_layout(
+            &styled,
+            self.config.viewport_width,
+            self.config.viewport_height,
+        );
+        let mut spatial = crate::output::generate_spatial_dom(
+            &laid_out,
+            self.config.viewport_width,
+            self.config.viewport_height,
+        );
+        spatial.url = url.to_string();
+
+        self.previous_dom = self.current_dom.take();
+        self.current_dom = Some(spatial);
+        self.form_values.clear();
+
+        Ok(self.current_dom.as_ref().unwrap())
+    }
+
     /// Get the current page DOM.
     pub fn dom(&self) -> Option<&SpatialDom> {
         self.current_dom.as_ref()
@@ -180,6 +202,17 @@ impl Session {
             (Some(old), Some(new)) => Some(crate::output::diff(old, new)),
             _ => None,
         }
+    }
+
+    /// Get detected JS behaviors for the current page.
+    pub fn behaviors(&self) -> Vec<crate::js::JsBehavior> {
+        self.current_html
+            .as_ref()
+            .map(|html| {
+                let dom_tree = crate::dom::parse_html(html);
+                crate::js::detect_behaviors(&dom_tree)
+            })
+            .unwrap_or_default()
     }
 
     /// Find an element by ID in the current DOM.
@@ -242,11 +275,40 @@ impl Session {
             }
         }
 
+        // Check for JS behaviors BEFORE form submit (onclick takes priority)
+        if let Some(html) = &self.current_html {
+            let dom_tree = crate::dom::parse_html(html);
+            let behaviors = crate::js::detect_behaviors(&dom_tree);
+            if let Some(behavior) = behaviors.iter().find(|b| b.trigger_id == id) {
+                match &behavior.action {
+                    crate::js::JsAction::Navigate { url } => {
+                        let target = if let Some(ref base) = self.current_url {
+                            base.join(url)
+                                .map(|u| u.to_string())
+                                .unwrap_or_else(|_| url.clone())
+                        } else {
+                            url.clone()
+                        };
+                        return self.goto(&target);
+                    }
+                    action => {
+                        // Apply the JS action to the DOM and re-render
+                        let modified = crate::js::apply_action(&dom_tree, action);
+                        let html_url = self.current_url.as_ref()
+                            .map(|u| u.to_string())
+                            .unwrap_or_default();
+                        return self.load_html_from_dom(modified, &html_url);
+                    }
+                }
+            }
+        }
+
+        // Form submission (after JS check, so onclick takes priority)
         if is_submit {
             return self.submit_form(id);
         }
 
-        // For other elements, just return current DOM
+        // For other elements, return current DOM
         self.current_dom
             .as_ref()
             .ok_or_else(|| FetchError::ActionError("No page loaded".to_string()))

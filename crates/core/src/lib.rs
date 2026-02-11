@@ -2,6 +2,7 @@ pub mod dom;
 pub mod css;
 pub mod layout;
 pub mod output;
+pub mod js;
 #[cfg(feature = "fetch")]
 pub mod fetch;
 
