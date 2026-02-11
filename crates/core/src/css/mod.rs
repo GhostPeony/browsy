@@ -45,6 +45,12 @@ pub struct LayoutStyle {
     pub font_size: f32,
     pub line_height: f32,
 
+    // Grid
+    pub grid_template_columns: Vec<GridTrack>,
+    pub grid_template_rows: Vec<GridTrack>,
+    pub grid_column: Option<GridPlacement>,
+    pub grid_row: Option<GridPlacement>,
+
     // Overflow
     pub overflow: Overflow,
 }
@@ -80,6 +86,10 @@ impl Default for LayoutStyle {
             gap: 0.0,
             font_size: 16.0,
             line_height: 1.2,
+            grid_template_columns: Vec::new(),
+            grid_template_rows: Vec::new(),
+            grid_column: None,
+            grid_row: None,
             overflow: Overflow::Visible,
         }
     }
@@ -192,6 +202,24 @@ pub enum Overflow {
     Hidden,
     Scroll,
     Auto,
+}
+
+/// A grid track definition (e.g., 1fr, 200px, auto).
+#[derive(Debug, Clone)]
+pub enum GridTrack {
+    Px(f32),
+    Fr(f32),
+    Percent(f32),
+    Auto,
+    MinContent,
+    MaxContent,
+}
+
+/// Grid placement: start / end or span.
+#[derive(Debug, Clone)]
+pub struct GridPlacement {
+    pub start: i16,
+    pub end: i16,
 }
 
 /// A DOM node with computed layout styles.
@@ -449,10 +477,12 @@ fn parse_inline_style(style_str: &str, style: &mut LayoutStyle) {
             Some(p) => p.trim().to_lowercase(),
             None => continue,
         };
-        let value = match parts.next() {
+        let raw_value = match parts.next() {
             Some(v) => v.trim(),
             None => continue,
         };
+        // Strip !important
+        let value = raw_value.trim_end_matches("!important").trim();
 
         match property.as_str() {
             "display" => {
@@ -695,6 +725,97 @@ fn parse_inline_style(style_str: &str, style: &mut LayoutStyle) {
                     style.border_width.left = v;
                 }
             }
+            // Flex shorthand: flex: <grow> [<shrink>] [<basis>]
+            "flex" => {
+                let parts: Vec<&str> = value.split_whitespace().collect();
+                match parts.len() {
+                    1 => {
+                        if value == "none" {
+                            style.flex_grow = 0.0;
+                            style.flex_shrink = 0.0;
+                            style.flex_basis = Dimension::Auto;
+                        } else if value == "auto" {
+                            style.flex_grow = 1.0;
+                            style.flex_shrink = 1.0;
+                            style.flex_basis = Dimension::Auto;
+                        } else if let Ok(grow) = parts[0].parse::<f32>() {
+                            style.flex_grow = grow;
+                            style.flex_shrink = 1.0;
+                            style.flex_basis = Dimension::Px(0.0);
+                        }
+                    }
+                    2 => {
+                        if let Ok(grow) = parts[0].parse::<f32>() {
+                            style.flex_grow = grow;
+                            if let Ok(shrink) = parts[1].parse::<f32>() {
+                                style.flex_shrink = shrink;
+                            } else if let Some(basis) = parse_dimension_value(parts[1]) {
+                                style.flex_basis = basis;
+                            }
+                        }
+                    }
+                    3 => {
+                        if let Ok(grow) = parts[0].parse::<f32>() {
+                            style.flex_grow = grow;
+                        }
+                        if let Ok(shrink) = parts[1].parse::<f32>() {
+                            style.flex_shrink = shrink;
+                        }
+                        if let Some(basis) = parse_dimension_value(parts[2]) {
+                            style.flex_basis = basis;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            // Flex-flow shorthand: flex-flow: <direction> [<wrap>]
+            "flex-flow" => {
+                for part in value.split_whitespace() {
+                    match part {
+                        "row" => style.flex_direction = FlexDirection::Row,
+                        "row-reverse" => style.flex_direction = FlexDirection::RowReverse,
+                        "column" => style.flex_direction = FlexDirection::Column,
+                        "column-reverse" => style.flex_direction = FlexDirection::ColumnReverse,
+                        "wrap" => style.flex_wrap = FlexWrap::Wrap,
+                        "nowrap" => style.flex_wrap = FlexWrap::NoWrap,
+                        "wrap-reverse" => style.flex_wrap = FlexWrap::WrapReverse,
+                        _ => {}
+                    }
+                }
+            }
+            // Place-items shorthand
+            "place-items" => {
+                let align = match value.split_whitespace().next().unwrap_or("") {
+                    "center" => AlignItems::Center,
+                    "flex-start" | "start" => AlignItems::FlexStart,
+                    "flex-end" | "end" => AlignItems::FlexEnd,
+                    "baseline" => AlignItems::Baseline,
+                    _ => AlignItems::Stretch,
+                };
+                style.align_items = align;
+            }
+            // Overflow axes
+            "overflow-x" | "overflow-y" => {
+                style.overflow = match value {
+                    "hidden" => Overflow::Hidden,
+                    "scroll" => Overflow::Scroll,
+                    "auto" => Overflow::Auto,
+                    _ => Overflow::Visible,
+                };
+            }
+            // Grid properties
+            "grid-template-columns" => {
+                style.grid_template_columns = parse_grid_template(value);
+            }
+            "grid-template-rows" => {
+                style.grid_template_rows = parse_grid_template(value);
+            }
+            "grid-column" => {
+                style.grid_column = parse_grid_placement(value);
+            }
+            "grid-row" => {
+                style.grid_row = parse_grid_placement(value);
+            }
             _ => {} // Ignore non-layout properties
         }
     }
@@ -786,5 +907,105 @@ fn parse_edges(value: &str) -> Edges {
             left: parts[3],
         },
         _ => Edges::zero(),
+    }
+}
+
+/// Parse grid-template-columns/rows: "1fr 200px auto repeat(3, 1fr)"
+fn parse_grid_template(value: &str) -> Vec<GridTrack> {
+    let mut tracks = Vec::new();
+    // Handle repeat() by expanding it
+    let expanded = expand_repeats(value);
+    for part in expanded.split_whitespace() {
+        if part.ends_with("fr") {
+            if let Ok(v) = part.trim_end_matches("fr").parse::<f32>() {
+                tracks.push(GridTrack::Fr(v));
+            }
+        } else if part == "auto" {
+            tracks.push(GridTrack::Auto);
+        } else if part == "min-content" {
+            tracks.push(GridTrack::MinContent);
+        } else if part == "max-content" {
+            tracks.push(GridTrack::MaxContent);
+        } else if part.ends_with('%') {
+            if let Ok(v) = part.trim_end_matches('%').parse::<f32>() {
+                tracks.push(GridTrack::Percent(v / 100.0));
+            }
+        } else if let Some(px) = parse_px(part) {
+            tracks.push(GridTrack::Px(px));
+        }
+    }
+    tracks
+}
+
+/// Expand repeat(N, track) in grid templates.
+fn expand_repeats(value: &str) -> String {
+    let mut result = String::new();
+    let mut chars = value.chars().peekable();
+    let mut buf = String::new();
+
+    while let Some(c) = chars.next() {
+        if buf.ends_with("repeat") && c == '(' {
+            buf.truncate(buf.len() - 6); // remove "repeat"
+            result.push_str(buf.trim());
+            buf.clear();
+
+            // Read count
+            let mut count_str = String::new();
+            while let Some(&c) = chars.peek() {
+                if c == ',' { chars.next(); break; }
+                count_str.push(c);
+                chars.next();
+            }
+            let count: usize = count_str.trim().parse().unwrap_or(1);
+
+            // Read track value until closing paren
+            let mut track = String::new();
+            let mut depth = 1;
+            while let Some(c) = chars.next() {
+                if c == '(' { depth += 1; }
+                if c == ')' { depth -= 1; if depth == 0 { break; } }
+                track.push(c);
+            }
+            let track = track.trim();
+
+            for i in 0..count {
+                if i > 0 || !result.is_empty() {
+                    result.push(' ');
+                }
+                result.push_str(track);
+            }
+        } else {
+            buf.push(c);
+        }
+    }
+    if !buf.is_empty() {
+        if !result.is_empty() {
+            result.push(' ');
+        }
+        result.push_str(buf.trim());
+    }
+    result
+}
+
+/// Parse grid-column/grid-row: "1 / 3" or "span 2" or "1"
+fn parse_grid_placement(value: &str) -> Option<GridPlacement> {
+    let value = value.trim();
+    if value.starts_with("span") {
+        let span: i16 = value.trim_start_matches("span").trim().parse().ok()?;
+        return Some(GridPlacement { start: 0, end: span });
+    }
+    if let Some((start_str, end_str)) = value.split_once('/') {
+        let start: i16 = start_str.trim().parse().ok()?;
+        let end_str = end_str.trim();
+        let end = if end_str.starts_with("span") {
+            let span: i16 = end_str.trim_start_matches("span").trim().parse().ok()?;
+            start + span
+        } else {
+            end_str.parse().ok()?
+        };
+        Some(GridPlacement { start, end })
+    } else {
+        let line: i16 = value.parse().ok()?;
+        Some(GridPlacement { start: line, end: line + 1 })
     }
 }

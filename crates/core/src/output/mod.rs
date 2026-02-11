@@ -30,6 +30,21 @@ pub struct SpatialElement {
     pub val: Option<String>,
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub input_type: Option<String>,
+    /// ARIA: whether the element is disabled
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disabled: Option<bool>,
+    /// ARIA: whether the element is checked (checkbox/radio)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checked: Option<bool>,
+    /// ARIA: whether expanded (dropdown, accordion)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expanded: Option<bool>,
+    /// ARIA: whether selected (tab, option)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected: Option<bool>,
+    /// ARIA: whether required
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required: Option<bool>,
     /// Bounds: [x, y, width, height]
     pub b: [i32; 4],
 }
@@ -74,10 +89,18 @@ fn collect_elements(
     id_counter: &mut u32,
     parent_hidden: bool,
 ) {
+    // aria-hidden="true" hides the element and all children
+    let aria_hidden = node
+        .attributes
+        .get("aria-hidden")
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
     // Determine if this node is hidden (cascades to children)
     let is_hidden = parent_hidden
         || node.style.display == Display::None
-        || node.style.visibility == Visibility::Hidden;
+        || node.style.visibility == Visibility::Hidden
+        || aria_hidden;
 
     if is_hidden {
         // Still recurse so we don't miss children that might override,
@@ -114,8 +137,9 @@ fn collect_elements(
         } else {
             collect_visible_text(node)
         };
+        // Use aria-label as text if no visible text
         let text = if text_content.is_empty() {
-            None
+            node.attributes.get("aria-label").cloned()
         } else {
             Some(text_content)
         };
@@ -130,6 +154,17 @@ fn collect_elements(
             None
         };
 
+        // ARIA state attributes
+        let disabled = parse_bool_attr(node, "disabled")
+            .or_else(|| parse_bool_attr(node, "aria-disabled"));
+        let checked = parse_bool_attr(node, "checked")
+            .or_else(|| parse_aria_bool(node, "aria-checked"));
+        let expanded = parse_aria_bool(node, "aria-expanded");
+        let selected = parse_bool_attr(node, "selected")
+            .or_else(|| parse_aria_bool(node, "aria-selected"));
+        let required = parse_bool_attr(node, "required")
+            .or_else(|| parse_aria_bool(node, "aria-required"));
+
         let el = SpatialElement {
             id: *id_counter,
             tag: tag.to_string(),
@@ -139,6 +174,11 @@ fn collect_elements(
             href,
             val,
             input_type,
+            disabled,
+            checked,
+            expanded,
+            selected,
+            required,
             b: [
                 node.bounds.x.round() as i32,
                 node.bounds.y.round() as i32,
@@ -207,8 +247,29 @@ fn determine_role(node: &LayoutNode) -> Option<String> {
         "textarea" => Some("textbox".to_string()),
         "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => Some("heading".to_string()),
         "nav" => Some("navigation".to_string()),
+        "main" => Some("main".to_string()),
+        "aside" => Some("complementary".to_string()),
+        "header" => Some("banner".to_string()),
+        "footer" => Some("contentinfo".to_string()),
+        "form" => Some("form".to_string()),
+        "section" => Some("region".to_string()),
+        "img" => Some("img".to_string()),
         _ => None,
     }
+}
+
+/// Parse a boolean HTML attribute (present = true).
+fn parse_bool_attr(node: &LayoutNode, attr: &str) -> Option<bool> {
+    if node.attributes.contains_key(attr) {
+        Some(true)
+    } else {
+        None
+    }
+}
+
+/// Parse an ARIA boolean attribute (value = "true" or "false").
+fn parse_aria_bool(node: &LayoutNode, attr: &str) -> Option<bool> {
+    node.attributes.get(attr).map(|v| v == "true")
 }
 
 fn find_title(node: &LayoutNode) -> Option<String> {

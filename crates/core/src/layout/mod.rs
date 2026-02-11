@@ -221,7 +221,67 @@ fn to_taffy_style(style: &css::LayoutStyle) -> Style {
                 _ => taffy::Overflow::Visible,
             },
         },
+        grid_template_columns: to_taffy_grid_tracks(&style.grid_template_columns),
+        grid_template_rows: to_taffy_grid_tracks(&style.grid_template_rows),
+        grid_column: to_taffy_grid_line(&style.grid_column),
+        grid_row: to_taffy_grid_line(&style.grid_row),
         ..Default::default()
+    }
+}
+
+fn to_taffy_grid_tracks(tracks: &[css::GridTrack]) -> Vec<taffy::TrackSizingFunction> {
+    tracks
+        .iter()
+        .map(|t| {
+            let sizing = match t {
+                css::GridTrack::Px(v) => taffy::NonRepeatedTrackSizingFunction {
+                    min: taffy::MinTrackSizingFunction::Fixed(LengthPercentage::Length(*v)),
+                    max: taffy::MaxTrackSizingFunction::Fixed(LengthPercentage::Length(*v)),
+                },
+                css::GridTrack::Fr(v) => taffy::NonRepeatedTrackSizingFunction {
+                    min: taffy::MinTrackSizingFunction::Fixed(LengthPercentage::Length(0.0)),
+                    max: taffy::MaxTrackSizingFunction::Fraction(*v),
+                },
+                css::GridTrack::Percent(v) => taffy::NonRepeatedTrackSizingFunction {
+                    min: taffy::MinTrackSizingFunction::Fixed(LengthPercentage::Percent(*v)),
+                    max: taffy::MaxTrackSizingFunction::Fixed(LengthPercentage::Percent(*v)),
+                },
+                css::GridTrack::Auto => taffy::NonRepeatedTrackSizingFunction {
+                    min: taffy::MinTrackSizingFunction::Auto,
+                    max: taffy::MaxTrackSizingFunction::Auto,
+                },
+                css::GridTrack::MinContent => taffy::NonRepeatedTrackSizingFunction {
+                    min: taffy::MinTrackSizingFunction::MinContent,
+                    max: taffy::MaxTrackSizingFunction::MinContent,
+                },
+                css::GridTrack::MaxContent => taffy::NonRepeatedTrackSizingFunction {
+                    min: taffy::MinTrackSizingFunction::MaxContent,
+                    max: taffy::MaxTrackSizingFunction::MaxContent,
+                },
+            };
+            taffy::TrackSizingFunction::Single(sizing)
+        })
+        .collect()
+}
+
+fn to_taffy_grid_line(placement: &Option<css::GridPlacement>) -> taffy::Line<taffy::GridPlacement> {
+    match placement {
+        Some(p) => taffy::Line {
+            start: if p.start > 0 {
+                taffy::GridPlacement::from_line_index(p.start)
+            } else {
+                taffy::GridPlacement::Auto
+            },
+            end: if p.end > 0 {
+                taffy::GridPlacement::from_line_index(p.end)
+            } else {
+                taffy::GridPlacement::Auto
+            },
+        },
+        None => taffy::Line {
+            start: taffy::GridPlacement::Auto,
+            end: taffy::GridPlacement::Auto,
+        },
     }
 }
 

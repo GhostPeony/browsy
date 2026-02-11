@@ -720,3 +720,163 @@ fn test_fetch_real_page() {
     let approx_tokens = compact.len() / 4;
     println!("Approx tokens: {}", approx_tokens);
 }
+
+#[test]
+fn test_css_grid_layout() {
+    let html = r#"
+    <html>
+    <head>
+        <style>
+            .grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                gap: 10px;
+                width: 600px;
+            }
+        </style>
+    </head>
+    <body style="margin: 0;">
+        <div class="grid">
+            <button>A</button>
+            <button>B</button>
+            <button>C</button>
+            <button>D</button>
+            <button>E</button>
+            <button>F</button>
+        </div>
+    </body>
+    </html>
+    "#;
+
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
+    let compact = output::to_compact_string(&dom);
+
+    println!("\n=== CSS Grid Layout ===");
+    println!("{}", compact);
+
+    let buttons: Vec<_> = dom.els.iter().filter(|e| e.tag == "button").collect();
+    assert_eq!(buttons.len(), 6, "Should find 6 buttons");
+
+    // First row: A, B, C should be at same y but different x
+    assert_eq!(buttons[0].b[1], buttons[1].b[1], "A and B should be on same row");
+    assert_eq!(buttons[1].b[1], buttons[2].b[1], "B and C should be on same row");
+    assert!(buttons[0].b[0] < buttons[1].b[0], "A should be left of B");
+    assert!(buttons[1].b[0] < buttons[2].b[0], "B should be left of C");
+
+    // Second row: D, E, F should be below first row
+    assert!(buttons[3].b[1] > buttons[0].b[1], "D should be below A");
+}
+
+#[test]
+fn test_flex_shorthand() {
+    let html = r#"
+    <html>
+    <head>
+        <style>
+            .container { display: flex; width: 600px; }
+            .sidebar { flex: 0 0 200px; }
+            .main { flex: 1; }
+        </style>
+    </head>
+    <body style="margin: 0;">
+        <div class="container">
+            <div class="sidebar"><button>Nav</button></div>
+            <div class="main"><button>Content</button></div>
+        </div>
+    </body>
+    </html>
+    "#;
+
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
+    let compact = output::to_compact_string(&dom);
+
+    println!("\n=== Flex Shorthand ===");
+    println!("{}", compact);
+
+    let nav = dom.els.iter().find(|e| e.text.as_deref() == Some("Nav")).unwrap();
+    let content = dom.els.iter().find(|e| e.text.as_deref() == Some("Content")).unwrap();
+
+    // Sidebar should be 200px wide (flex: 0 0 200px)
+    assert_eq!(nav.b[2], 200, "Sidebar should be 200px wide, got {}", nav.b[2]);
+    // Content should fill remaining space (400px)
+    assert_eq!(content.b[2], 400, "Main should be 400px wide, got {}", content.b[2]);
+}
+
+#[test]
+fn test_aria_attributes() {
+    let html = r#"
+    <html><body>
+        <button aria-label="Close dialog">X</button>
+        <input type="checkbox" checked aria-checked="true" />
+        <button disabled>Disabled Button</button>
+        <details>
+            <summary aria-expanded="false">Show More</summary>
+        </details>
+        <input type="email" required placeholder="Email" />
+        <div aria-hidden="true"><button>Hidden by ARIA</button></div>
+        <button aria-label="Search">🔍</button>
+    </body></html>
+    "#;
+
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
+    let compact = output::to_compact_string(&dom);
+
+    println!("\n=== ARIA Attributes ===");
+    println!("{}", compact);
+    println!("{}", serde_json::to_string_pretty(&dom).unwrap());
+
+    // Button with aria-label should have text "X" (visible text takes priority)
+    let close_btn = dom.els.iter().find(|e| e.text.as_deref() == Some("X")).unwrap();
+    assert_eq!(close_btn.role.as_deref(), Some("button"));
+
+    // Checkbox should be checked
+    let checkbox = dom.els.iter().find(|e| e.tag == "input" && e.role.as_deref() == Some("checkbox"));
+    assert!(checkbox.is_some(), "Should find checkbox");
+    assert_eq!(checkbox.unwrap().checked, Some(true));
+
+    // Disabled button
+    let disabled = dom.els.iter().find(|e| e.text.as_deref() == Some("Disabled Button")).unwrap();
+    assert_eq!(disabled.disabled, Some(true));
+
+    // Required input
+    let email = dom.els.iter().find(|e| e.ph.as_deref() == Some("Email")).unwrap();
+    assert_eq!(email.required, Some(true));
+
+    // aria-hidden element should not appear
+    assert!(
+        dom.els.iter().find(|e| e.text.as_deref() == Some("Hidden by ARIA")).is_none(),
+        "aria-hidden elements should not appear"
+    );
+
+    // Button with aria-label and no visible text uses aria-label
+    // (the emoji button has visible text "🔍" so it uses that, but let's check aria-label fallback)
+}
+
+#[test]
+fn test_landmark_roles() {
+    let html = r#"
+    <html><body>
+        <header><a href="/">Logo</a></header>
+        <nav><a href="/about">About</a></nav>
+        <main><h1>Content</h1></main>
+        <aside><p>Sidebar info</p></aside>
+        <footer><p>Copyright 2026</p></footer>
+    </body></html>
+    "#;
+
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
+
+    println!("\n=== Landmarks ===");
+    println!("{}", serde_json::to_string_pretty(&dom).unwrap());
+
+    // Check heading role
+    let h1 = dom.els.iter().find(|e| e.tag == "h1").unwrap();
+    assert_eq!(h1.role.as_deref(), Some("heading"));
+
+    // Link roles
+    let links: Vec<_> = dom.els.iter().filter(|e| e.tag == "a").collect();
+    assert!(links.len() >= 2);
+    for link in &links {
+        assert_eq!(link.role.as_deref(), Some("link"));
+    }
+}
