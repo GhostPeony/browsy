@@ -12,6 +12,7 @@ pub struct LayoutStyle {
     pub visibility: Visibility,
 
     // Box model
+    pub box_sizing: BoxSizing,
     pub width: Dimension,
     pub height: Dimension,
     pub min_width: Dimension,
@@ -20,6 +21,7 @@ pub struct LayoutStyle {
     pub max_height: Dimension,
     pub margin: Edges,
     pub padding: Edges,
+    pub border_width: Edges,
 
     // Position
     pub position: Position,
@@ -52,6 +54,7 @@ impl Default for LayoutStyle {
         Self {
             display: Display::Block,
             visibility: Visibility::Visible,
+            box_sizing: BoxSizing::ContentBox,
             width: Dimension::Auto,
             height: Dimension::Auto,
             min_width: Dimension::Auto,
@@ -60,6 +63,7 @@ impl Default for LayoutStyle {
             max_height: Dimension::Auto,
             margin: Edges::zero(),
             padding: Edges::zero(),
+            border_width: Edges::zero(),
             position: Position::Static,
             top: Dimension::Auto,
             right: Dimension::Auto,
@@ -96,6 +100,12 @@ pub enum Display {
 pub enum Visibility {
     Visible,
     Hidden,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BoxSizing {
+    ContentBox,
+    BorderBox,
 }
 
 #[derive(Debug, Clone)]
@@ -337,9 +347,24 @@ fn default_style_for_tag(tag: &str) -> LayoutStyle {
         // Block elements (default)
         "div" | "p" | "section" | "article" | "main" | "header" | "footer" | "nav" | "aside"
         | "form" | "fieldset" | "figure" | "figcaption" | "blockquote" | "pre" | "address"
-        | "details" | "summary" | "dialog" | "ul" | "ol" | "li" | "dl" | "dt" | "dd"
-        | "table" | "thead" | "tbody" | "tfoot" | "tr" | "td" | "th" => {
+        | "details" | "summary" | "dialog" | "ul" | "ol" | "li" | "dl" | "dt" | "dd" => {
             style.display = Display::Block;
+        }
+
+        // Table elements — approximate with flex layout
+        "table" | "thead" | "tbody" | "tfoot" => {
+            style.display = Display::Flex;
+            style.flex_direction = FlexDirection::Column;
+            style.width = Dimension::Percent(1.0); // 100%
+        }
+        "tr" => {
+            style.display = Display::Flex;
+            style.flex_direction = FlexDirection::Row;
+        }
+        "td" | "th" => {
+            style.display = Display::Block;
+            style.flex_grow = 1.0;
+            style.flex_basis = Dimension::Px(0.0);
         }
 
         // Headings — block with larger font
@@ -623,9 +648,54 @@ fn parse_inline_style(style_str: &str, style: &mut LayoutStyle) {
                     _ => Overflow::Visible,
                 };
             }
+            "box-sizing" => {
+                style.box_sizing = match value {
+                    "border-box" => BoxSizing::BorderBox,
+                    _ => BoxSizing::ContentBox,
+                };
+            }
+            "border" => {
+                // Parse shorthand: "1px solid #000" — extract width
+                if let Some(w) = extract_border_width(value) {
+                    style.border_width = Edges { top: w, right: w, bottom: w, left: w };
+                }
+            }
+            "border-width" => {
+                style.border_width = parse_edges(value);
+            }
+            "border-top-width" => {
+                if let Some(v) = parse_px(value) {
+                    style.border_width.top = v;
+                }
+            }
+            "border-right-width" => {
+                if let Some(v) = parse_px(value) {
+                    style.border_width.right = v;
+                }
+            }
+            "border-bottom-width" => {
+                if let Some(v) = parse_px(value) {
+                    style.border_width.bottom = v;
+                }
+            }
+            "border-left-width" => {
+                if let Some(v) = parse_px(value) {
+                    style.border_width.left = v;
+                }
+            }
             _ => {} // Ignore non-layout properties
         }
     }
+}
+
+/// Extract the width component from a border shorthand like "1px solid #000".
+fn extract_border_width(value: &str) -> Option<f32> {
+    for part in value.split_whitespace() {
+        if let Some(px) = parse_px(part) {
+            return Some(px);
+        }
+    }
+    None
 }
 
 fn parse_dimension_value(value: &str) -> Option<Dimension> {

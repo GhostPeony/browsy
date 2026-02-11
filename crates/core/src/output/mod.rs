@@ -14,7 +14,7 @@ pub struct SpatialDom {
 }
 
 /// A single element in the Spatial DOM.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone, PartialEq)]
 pub struct SpatialElement {
     pub id: u32,
     pub tag: String,
@@ -254,4 +254,103 @@ pub fn to_compact_string(dom: &SpatialDom) -> String {
         lines.push(format!("[{}]", parts.join(" ")));
     }
     lines.join("\n")
+}
+
+/// Delta output — only the changes between two SpatialDoms.
+#[derive(Debug, Serialize)]
+pub struct DeltaDom {
+    /// Elements that were added or changed.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub changed: Vec<SpatialElement>,
+    /// IDs of elements that were removed.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub removed: Vec<u32>,
+}
+
+/// Compute the diff between two SpatialDoms.
+/// Returns only added/changed/removed elements.
+pub fn diff(old: &SpatialDom, new: &SpatialDom) -> DeltaDom {
+    let mut changed = Vec::new();
+    let mut removed = Vec::new();
+
+    // Build lookup of old elements by a content key (tag + text + href + bounds)
+    // We match by content similarity, not by ID (since IDs are assigned sequentially)
+    let old_set: std::collections::HashSet<ElementKey> = old.els.iter().map(ElementKey::from).collect();
+    let new_set: std::collections::HashSet<ElementKey> = new.els.iter().map(ElementKey::from).collect();
+
+    // Elements in new but not in old → added/changed
+    for el in &new.els {
+        let key = ElementKey::from(el);
+        if !old_set.contains(&key) {
+            changed.push(el.clone());
+        }
+    }
+
+    // Elements in old but not in new → removed
+    for el in &old.els {
+        let key = ElementKey::from(el);
+        if !new_set.contains(&key) {
+            removed.push(el.id);
+        }
+    }
+
+    DeltaDom { changed, removed }
+}
+
+/// Generate compact string format for a delta.
+pub fn delta_to_compact_string(delta: &DeltaDom) -> String {
+    let mut lines = Vec::new();
+
+    if !delta.removed.is_empty() {
+        lines.push(format!("-[{}]", delta.removed.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",")));
+    }
+
+    for el in &delta.changed {
+        let mut parts = Vec::new();
+        parts.push(format!("+{}:{}", el.id, el.tag));
+
+        if let Some(ref t) = el.input_type {
+            if t != "text" {
+                parts.last_mut().unwrap().push_str(&format!(":{}", t));
+            }
+        }
+
+        if let Some(ref text) = el.text {
+            parts.push(format!("\"{}\"", text));
+        } else if let Some(ref ph) = el.ph {
+            parts.push(format!("\"{}\"", ph));
+        }
+
+        if let Some(ref href) = el.href {
+            parts.push(format!("->{}", href));
+        }
+
+        parts.push(format!("@{},{} {}x{}", el.b[0], el.b[1], el.b[2], el.b[3]));
+        lines.push(format!("[{}]", parts.join(" ")));
+    }
+
+    lines.join("\n")
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct ElementKey {
+    tag: String,
+    text: Option<String>,
+    ph: Option<String>,
+    href: Option<String>,
+    input_type: Option<String>,
+    bounds: [i32; 4],
+}
+
+impl From<&SpatialElement> for ElementKey {
+    fn from(el: &SpatialElement) -> Self {
+        Self {
+            tag: el.tag.clone(),
+            text: el.text.clone(),
+            ph: el.ph.clone(),
+            href: el.href.clone(),
+            input_type: el.input_type.clone(),
+            bounds: el.b,
+        }
+    }
 }

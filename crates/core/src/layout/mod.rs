@@ -164,6 +164,12 @@ fn to_taffy_style(style: &css::LayoutStyle) -> Style {
             bottom: LengthPercentage::Length(style.padding.bottom),
             left: LengthPercentage::Length(style.padding.left),
         },
+        border: Rect {
+            top: LengthPercentage::Length(style.border_width.top),
+            right: LengthPercentage::Length(style.border_width.right),
+            bottom: LengthPercentage::Length(style.border_width.bottom),
+            left: LengthPercentage::Length(style.border_width.left),
+        },
         inset: Rect {
             top: to_taffy_auto_dim(&style.top),
             right: to_taffy_auto_dim(&style.right),

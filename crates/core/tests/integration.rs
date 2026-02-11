@@ -545,4 +545,141 @@ fn test_table_layout() {
 
     assert!(dom.els.iter().any(|e| e.text.as_deref() == Some("Buy")));
     assert!(dom.els.iter().any(|e| e.href.as_deref() == Some("/buy/b")));
+
+    // Table headers should be in the same row (same y, different x)
+    assert_eq!(ths[0].b[1], ths[1].b[1], "Headers should share same y");
+    assert!(ths[0].b[0] < ths[1].b[0], "Name should be left of Price");
+    assert!(ths[1].b[0] < ths[2].b[0], "Price should be left of Action");
+}
+
+#[test]
+fn test_percentage_widths() {
+    let html = r#"
+    <html>
+    <head>
+        <style>
+            .container { width: 100%; display: flex; }
+            .sidebar { width: 25%; }
+            .main { width: 75%; }
+        </style>
+    </head>
+    <body style="margin: 0;">
+        <div class="container">
+            <div class="sidebar">
+                <button>Menu</button>
+            </div>
+            <div class="main">
+                <h1>Content</h1>
+                <button>Action</button>
+            </div>
+        </div>
+    </body>
+    </html>
+    "#;
+
+    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let compact = output::to_compact_string(&dom);
+
+    println!("\n=== Percentage Width Test ===");
+    println!("{}", compact);
+
+    let menu = dom.els.iter().find(|e| e.text.as_deref() == Some("Menu")).unwrap();
+    let action = dom.els.iter().find(|e| e.text.as_deref() == Some("Action")).unwrap();
+
+    // Menu button should be in the left 25% (x < 480 on 1920px viewport)
+    assert!(
+        menu.b[0] < 480,
+        "Menu should be in left 25%, got x={}",
+        menu.b[0]
+    );
+
+    // Action button should be in the right 75% (x >= 480)
+    assert!(
+        action.b[0] >= 480,
+        "Action should be in right 75%, got x={}",
+        action.b[0]
+    );
+}
+
+#[test]
+fn test_delta_output() {
+    // Page 1: Login page
+    let page1 = r#"
+    <html><body>
+        <h1>Login</h1>
+        <input type="email" placeholder="Email" />
+        <input type="password" placeholder="Password" />
+        <button>Sign In</button>
+        <a href="/forgot">Forgot password?</a>
+    </body></html>
+    "#;
+
+    // Page 2: Dashboard (after login) — different content
+    let page2 = r#"
+    <html><body>
+        <h1>Dashboard</h1>
+        <p>Welcome back, User!</p>
+        <button>Logout</button>
+        <a href="/settings">Settings</a>
+    </body></html>
+    "#;
+
+    let dom1 = agentbrowser_core::parse(page1, 1920.0, 1080.0);
+    let dom2 = agentbrowser_core::parse(page2, 1920.0, 1080.0);
+
+    let delta = output::diff(&dom1, &dom2);
+
+    println!("\n=== Delta Output ===");
+    println!("Changed: {} elements", delta.changed.len());
+    println!("Removed: {} elements", delta.removed.len());
+    println!("{}", output::delta_to_compact_string(&delta));
+
+    // All of page2's elements should show as changed (since content differs)
+    assert!(!delta.changed.is_empty(), "Should have changed elements");
+    assert!(!delta.removed.is_empty(), "Should have removed elements");
+
+    // Dashboard heading should be in changed
+    assert!(
+        delta.changed.iter().any(|e| e.text.as_deref() == Some("Dashboard")),
+        "Dashboard heading should be in changed"
+    );
+
+    // Login heading should be in removed
+    let login_h1 = dom1.els.iter().find(|e| e.text.as_deref() == Some("Login")).unwrap();
+    assert!(
+        delta.removed.contains(&login_h1.id),
+        "Login heading should be in removed"
+    );
+
+    // Delta should be smaller than full page
+    let full_tokens = output::to_compact_string(&dom2).len() / 4;
+    let delta_tokens = output::delta_to_compact_string(&delta).len() / 4;
+    println!("Full page: ~{} tokens, Delta: ~{} tokens", full_tokens, delta_tokens);
+
+    // Now test minimal change — same page, button text changes
+    let page3 = r#"
+    <html><body>
+        <h1>Dashboard</h1>
+        <p>Welcome back, User!</p>
+        <button>Sign Out</button>
+        <a href="/settings">Settings</a>
+    </body></html>
+    "#;
+
+    let dom3 = agentbrowser_core::parse(page3, 1920.0, 1080.0);
+    let delta2 = output::diff(&dom2, &dom3);
+
+    println!("\n=== Minimal Delta ===");
+    println!("Changed: {} elements", delta2.changed.len());
+    println!("Removed: {} elements", delta2.removed.len());
+    println!("{}", output::delta_to_compact_string(&delta2));
+
+    // Only the button should differ
+    assert_eq!(delta2.changed.len(), 1, "Only 1 element should change");
+    assert_eq!(delta2.removed.len(), 1, "Only 1 element should be removed");
+    assert_eq!(
+        delta2.changed[0].text.as_deref(),
+        Some("Sign Out"),
+        "Changed element should be the new button"
+    );
 }
