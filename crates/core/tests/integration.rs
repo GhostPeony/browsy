@@ -249,3 +249,300 @@ fn test_css_style_tag_selectors() {
     let ghost = dom.els.iter().find(|e| e.text.as_deref() == Some("Ghost"));
     assert!(ghost.is_none(), "Ghost button should be hidden via .hidden class");
 }
+
+#[test]
+fn test_font_size_inheritance() {
+    let html = r#"
+    <html>
+    <head>
+        <style>
+            .big-text {
+                font-size: 24px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="big-text">
+            <button>Inherited Big</button>
+            <p>Big paragraph</p>
+            <div>
+                <button>Nested Inherited</button>
+            </div>
+        </div>
+        <div>
+            <button>Default Size</button>
+        </div>
+    </body>
+    </html>
+    "#;
+
+    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+
+    println!("\n=== Font Size Inheritance Test ===");
+    for el in &dom.els {
+        println!("  {} ({}) text={:?} bounds={:?}", el.id, el.tag, el.text, el.b);
+    }
+
+    // Buttons inside .big-text should be taller than the default-size button
+    // because they inherit font-size: 24px, which makes text taller
+    let big_btn = dom.els.iter().find(|e| e.text.as_deref() == Some("Inherited Big")).unwrap();
+    let nested_btn = dom.els.iter().find(|e| e.text.as_deref() == Some("Nested Inherited")).unwrap();
+    let default_btn = dom.els.iter().find(|e| e.text.as_deref() == Some("Default Size")).unwrap();
+
+    // big buttons should have larger height than default (24px * 1.2 = ~29 vs 16px * 1.2 = ~19)
+    assert!(
+        big_btn.b[3] > default_btn.b[3],
+        "Inherited big button height ({}) should be greater than default ({})",
+        big_btn.b[3], default_btn.b[3]
+    );
+    assert!(
+        nested_btn.b[3] > default_btn.b[3],
+        "Nested inherited button height ({}) should be greater than default ({})",
+        nested_btn.b[3], default_btn.b[3]
+    );
+}
+
+#[test]
+fn test_ecommerce_product_card() {
+    let html = r#"
+    <html>
+    <head>
+        <style>
+            .card {
+                display: flex;
+                flex-direction: column;
+                width: 300px;
+                padding: 16px;
+            }
+            .price {
+                font-size: 24px;
+            }
+            .actions {
+                display: flex;
+                gap: 8px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h2>Wireless Headphones</h2>
+            <p class="price">$79.99</p>
+            <p>Noise-cancelling, 30hr battery</p>
+            <div class="actions">
+                <button>Add to Cart</button>
+                <button>Buy Now</button>
+            </div>
+            <a href="/products/headphones">View Details</a>
+        </div>
+    </body>
+    </html>
+    "#;
+
+    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let compact = output::to_compact_string(&dom);
+
+    println!("\n=== E-commerce Card ===");
+    println!("{}", compact);
+
+    // Should find heading, price text, buttons, and link
+    assert!(dom.els.iter().any(|e| e.text.as_deref() == Some("Wireless Headphones")));
+    assert!(dom.els.iter().any(|e| e.text.as_deref() == Some("$79.99")));
+    assert!(dom.els.iter().any(|e| e.text.as_deref() == Some("Add to Cart")));
+    assert!(dom.els.iter().any(|e| e.text.as_deref() == Some("Buy Now")));
+    assert!(dom.els.iter().any(|e| e.href.as_deref() == Some("/products/headphones")));
+
+    // Buttons should be side-by-side (flex row)
+    let add = dom.els.iter().find(|e| e.text.as_deref() == Some("Add to Cart")).unwrap();
+    let buy = dom.els.iter().find(|e| e.text.as_deref() == Some("Buy Now")).unwrap();
+    assert!(add.b[0] < buy.b[0], "Add to Cart should be left of Buy Now");
+
+    // Compact output should be minimal
+    let approx_tokens = compact.len() / 4;
+    println!("Approx tokens: {}", approx_tokens);
+    assert!(approx_tokens < 150, "Should be under 150 tokens, got {}", approx_tokens);
+}
+
+#[test]
+fn test_navigation_with_dropdown() {
+    let html = r#"
+    <html>
+    <head>
+        <style>
+            nav { display: flex; width: 100%; height: 60px; align-items: center; gap: 20px; padding: 0 24px; }
+            .dropdown { display: flex; flex-direction: column; }
+            .dropdown-menu { display: none; }
+        </style>
+    </head>
+    <body>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/products">Products</a>
+            <div class="dropdown">
+                <button>Account</button>
+                <div class="dropdown-menu">
+                    <a href="/profile">Profile</a>
+                    <a href="/settings">Settings</a>
+                    <button>Logout</button>
+                </div>
+            </div>
+            <input type="search" placeholder="Search..." />
+        </nav>
+    </body>
+    </html>
+    "#;
+
+    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let compact = output::to_compact_string(&dom);
+
+    println!("\n=== Navigation Test ===");
+    println!("{}", compact);
+
+    // Visible elements: Home, Products, Account button, Search input
+    assert!(dom.els.iter().any(|e| e.href.as_deref() == Some("/")));
+    assert!(dom.els.iter().any(|e| e.href.as_deref() == Some("/products")));
+    assert!(dom.els.iter().any(|e| e.text.as_deref() == Some("Account")));
+    assert!(dom.els.iter().any(|e| e.ph.as_deref() == Some("Search...")));
+
+    // Dropdown-menu items should NOT appear (display: none)
+    assert!(
+        dom.els.iter().find(|e| e.href.as_deref() == Some("/profile")).is_none(),
+        "Profile link should be hidden in closed dropdown"
+    );
+    assert!(
+        dom.els.iter().find(|e| e.text.as_deref() == Some("Logout")).is_none(),
+        "Logout button should be hidden in closed dropdown"
+    );
+
+    // Search input should have role searchbox
+    let search = dom.els.iter().find(|e| e.ph.as_deref() == Some("Search...")).unwrap();
+    assert_eq!(search.role.as_deref(), Some("searchbox"));
+}
+
+#[test]
+fn test_form_with_labels_and_validation() {
+    let html = r#"
+    <html>
+    <head>
+        <style>
+            form { display: flex; flex-direction: column; width: 500px; gap: 12px; padding: 24px; }
+            .field { display: flex; flex-direction: column; gap: 4px; }
+        </style>
+    </head>
+    <body>
+        <form>
+            <h2>Create Account</h2>
+            <div class="field">
+                <label>Full Name</label>
+                <input type="text" placeholder="John Doe" />
+            </div>
+            <div class="field">
+                <label>Email</label>
+                <input type="email" placeholder="john@example.com" />
+            </div>
+            <div class="field">
+                <label>Password</label>
+                <input type="password" placeholder="Min 8 characters" />
+            </div>
+            <select>
+                <option value="">Select Role</option>
+                <option value="dev">Developer</option>
+                <option value="pm">Project Manager</option>
+            </select>
+            <textarea placeholder="Tell us about yourself"></textarea>
+            <button>Create Account</button>
+        </form>
+    </body>
+    </html>
+    "#;
+
+    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let compact = output::to_compact_string(&dom);
+
+    println!("\n=== Form Test ===");
+    println!("{}", compact);
+
+    // Check all form elements present
+    let tags: Vec<&str> = dom.els.iter().map(|e| e.tag.as_str()).collect();
+    assert!(tags.contains(&"h2"), "Should find heading");
+    assert!(tags.contains(&"label"), "Should find labels");
+    assert!(tags.contains(&"input"), "Should find inputs");
+    assert!(tags.contains(&"select"), "Should find select");
+    assert!(tags.contains(&"textarea"), "Should find textarea");
+    assert!(tags.contains(&"button"), "Should find submit button");
+
+    // Check input types
+    let inputs: Vec<_> = dom.els.iter().filter(|e| e.tag == "input").collect();
+    assert_eq!(inputs.len(), 3, "Should find 3 inputs");
+
+    let email_input = dom.els.iter().find(|e| e.input_type.as_deref() == Some("email")).unwrap();
+    assert_eq!(email_input.role.as_deref(), Some("textbox"));
+
+    let pw_input = dom.els.iter().find(|e| e.input_type.as_deref() == Some("password")).unwrap();
+    assert_eq!(pw_input.ph.as_deref(), Some("Min 8 characters"));
+
+    // Select should have combobox role
+    let select = dom.els.iter().find(|e| e.tag == "select").unwrap();
+    assert_eq!(select.role.as_deref(), Some("combobox"));
+
+    // Textarea should have textbox role
+    let textarea = dom.els.iter().find(|e| e.tag == "textarea").unwrap();
+    assert_eq!(textarea.role.as_deref(), Some("textbox"));
+
+    // Vertical layout: each field should be below the previous
+    let labels: Vec<_> = dom.els.iter().filter(|e| e.tag == "label").collect();
+    assert_eq!(labels.len(), 3, "Should find 3 labels");
+    for i in 1..labels.len() {
+        assert!(
+            labels[i].b[1] > labels[i - 1].b[1],
+            "Label {} should be below label {}",
+            i, i - 1
+        );
+    }
+}
+
+#[test]
+fn test_table_layout() {
+    let html = r#"
+    <html>
+    <body>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Widget A</td>
+                    <td>$9.99</td>
+                    <td><button>Buy</button></td>
+                </tr>
+                <tr>
+                    <td>Widget B</td>
+                    <td>$14.99</td>
+                    <td><a href="/buy/b">Purchase</a></td>
+                </tr>
+            </tbody>
+        </table>
+    </body>
+    </html>
+    "#;
+
+    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+    let compact = output::to_compact_string(&dom);
+
+    println!("\n=== Table Test ===");
+    println!("{}", compact);
+
+    // Should find table headers, cells, buttons, and links
+    let ths: Vec<_> = dom.els.iter().filter(|e| e.tag == "th").collect();
+    assert_eq!(ths.len(), 3, "Should find 3 table headers");
+
+    let tds: Vec<_> = dom.els.iter().filter(|e| e.tag == "td").collect();
+    assert_eq!(tds.len(), 6, "Should find 6 table cells");
+
+    assert!(dom.els.iter().any(|e| e.text.as_deref() == Some("Buy")));
+    assert!(dom.els.iter().any(|e| e.href.as_deref() == Some("/buy/b")));
+}

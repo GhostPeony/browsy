@@ -203,7 +203,7 @@ pub fn compute_styles(dom: &DomNode) -> StyledNode {
 
     // 2. Build styled tree with rules applied
     let ancestors = Vec::new();
-    style_node(dom, &rules, &ancestors)
+    style_node(dom, &rules, &ancestors, None)
 }
 
 /// Recursively extract all <style> tag content from the DOM.
@@ -228,11 +228,25 @@ fn style_node(
     node: &DomNode,
     rules: &[CssRule],
     ancestors: &[(String, Vec<String>, Option<String>)],
+    parent_style: Option<&LayoutStyle>,
 ) -> StyledNode {
     // 1. Start with default styles for the tag
     let mut style = default_style_for_tag(&node.tag);
 
-    // 2. Apply matching stylesheet rules (in order, lower specificity first)
+    // 2. Inherit inheritable properties from parent
+    if let Some(parent) = parent_style {
+        // font-size inherits except for elements with explicit UA defaults (headings)
+        let has_ua_font_size = matches!(
+            node.tag.as_str(),
+            "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
+        );
+        if !has_ua_font_size {
+            style.font_size = parent.font_size;
+        }
+        style.line_height = parent.line_height;
+    }
+
+    // 3. Apply matching stylesheet rules (in order, lower specificity first)
     if node.node_type == NodeType::Element {
         let classes = get_classes(node);
         let id = node.get_attr("id");
@@ -256,12 +270,12 @@ fn style_node(
         }
     }
 
-    // 3. Apply inline style (highest priority)
+    // 4. Apply inline style (highest priority)
     if let Some(inline) = node.get_attr("style") {
         parse_inline_style(inline, &mut style);
     }
 
-    // 4. Handle HTML attributes
+    // 5. Handle HTML attributes
     if node.attributes.contains_key("hidden") {
         style.display = Display::None;
     }
@@ -276,7 +290,7 @@ fn style_node(
         }
     }
 
-    // 5. Build ancestry for children
+    // 6. Build ancestry for children
     let mut child_ancestors = ancestors.to_vec();
     if node.node_type == NodeType::Element {
         child_ancestors.push((
@@ -289,7 +303,7 @@ fn style_node(
     let children = node
         .children
         .iter()
-        .map(|c| style_node(c, rules, &child_ancestors))
+        .map(|c| style_node(c, rules, &child_ancestors, Some(&style)))
         .collect();
 
     StyledNode {
