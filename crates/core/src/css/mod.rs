@@ -1,4 +1,7 @@
+pub mod selector;
+
 use crate::dom::{DomNode, NodeType};
+use selector::{parse_stylesheet, matches_element, CssRule};
 
 /// Computed layout styles for a single element.
 /// Only the ~40 properties that affect bounding box computation.
@@ -192,25 +195,76 @@ pub struct StyledNode {
     pub children: Vec<StyledNode>,
 }
 
-/// Apply default styles based on tag and inline style attributes.
+/// Apply default styles, stylesheet rules, and inline styles.
 pub fn compute_styles(dom: &DomNode) -> StyledNode {
-    style_node(dom)
+    // 1. Extract CSS from <style> tags
+    let css_text = extract_style_tags(dom);
+    let rules = parse_stylesheet(&css_text);
+
+    // 2. Build styled tree with rules applied
+    let ancestors = Vec::new();
+    style_node(dom, &rules, &ancestors)
 }
 
-fn style_node(node: &DomNode) -> StyledNode {
+/// Recursively extract all <style> tag content from the DOM.
+fn extract_style_tags(node: &DomNode) -> String {
+    let mut css = String::new();
+    if node.tag == "style" {
+        // Collect text content of the style element
+        for child in &node.children {
+            if child.node_type == NodeType::Text {
+                css.push_str(&child.text);
+                css.push('\n');
+            }
+        }
+    }
+    for child in &node.children {
+        css.push_str(&extract_style_tags(child));
+    }
+    css
+}
+
+fn style_node(
+    node: &DomNode,
+    rules: &[CssRule],
+    ancestors: &[(String, Vec<String>, Option<String>)],
+) -> StyledNode {
+    // 1. Start with default styles for the tag
     let mut style = default_style_for_tag(&node.tag);
 
-    // Parse inline style attribute
+    // 2. Apply matching stylesheet rules (in order, lower specificity first)
+    if node.node_type == NodeType::Element {
+        let classes = get_classes(node);
+        let id = node.get_attr("id");
+
+        // Collect matching rules with specificity
+        let mut matched: Vec<(&CssRule, u32)> = rules
+            .iter()
+            .filter(|rule| {
+                rule.selectors.iter().any(|sel| {
+                    matches_element(sel, &node.tag, &classes, id, &node.attributes, ancestors)
+                })
+            })
+            .map(|rule| (rule, rule.specificity))
+            .collect();
+
+        // Sort by specificity (lower first, so later rules override)
+        matched.sort_by_key(|(_, spec)| *spec);
+
+        for (rule, _) in &matched {
+            parse_inline_style(&rule.declarations, &mut style);
+        }
+    }
+
+    // 3. Apply inline style (highest priority)
     if let Some(inline) = node.get_attr("style") {
         parse_inline_style(inline, &mut style);
     }
 
-    // Handle hidden attribute
+    // 4. Handle HTML attributes
     if node.attributes.contains_key("hidden") {
         style.display = Display::None;
     }
-
-    // Handle width/height attributes (for <img>, <table>, etc.)
     if let Some(w) = node.get_attr("width") {
         if let Some(dim) = parse_dimension_value(w) {
             style.width = dim;
@@ -222,7 +276,21 @@ fn style_node(node: &DomNode) -> StyledNode {
         }
     }
 
-    let children = node.children.iter().map(|c| style_node(c)).collect();
+    // 5. Build ancestry for children
+    let mut child_ancestors = ancestors.to_vec();
+    if node.node_type == NodeType::Element {
+        child_ancestors.push((
+            node.tag.clone(),
+            get_classes(node),
+            node.get_attr("id").map(|s| s.to_string()),
+        ));
+    }
+
+    let children = node
+        .children
+        .iter()
+        .map(|c| style_node(c, rules, &child_ancestors))
+        .collect();
 
     StyledNode {
         tag: node.tag.clone(),
@@ -232,6 +300,13 @@ fn style_node(node: &DomNode) -> StyledNode {
         style,
         children,
     }
+}
+
+/// Extract class names from an element's class attribute.
+fn get_classes(node: &DomNode) -> Vec<String> {
+    node.get_attr("class")
+        .map(|c| c.split_whitespace().map(|s| s.to_string()).collect())
+        .unwrap_or_default()
 }
 
 /// Default layout styles based on HTML tag.

@@ -114,8 +114,8 @@ fn convert_node(handle: &Handle) -> DomNode {
         NodeData::Element { name, attrs, .. } => {
             let tag = name.local.to_string();
 
-            // Skip script, style, svg content entirely
-            if tag == "script" || tag == "style" || tag == "svg" || tag == "path" {
+            // Skip script and svg content (but keep style for CSS extraction)
+            if tag == "script" || tag == "svg" || tag == "path" {
                 let mut node = DomNode::new_element(&tag);
                 for attr in attrs.borrow().iter() {
                     node.attributes

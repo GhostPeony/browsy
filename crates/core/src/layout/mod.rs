@@ -9,6 +9,7 @@ pub struct LayoutNode {
     pub tag: String,
     pub attributes: std::collections::HashMap<String, String>,
     pub text: String,
+    pub text_content: String,
     pub node_type: NodeType,
     pub style: css::LayoutStyle,
     pub bounds: Bounds,
@@ -238,6 +239,28 @@ fn length_or_auto(val: f32) -> LengthPercentageAuto {
     LengthPercentageAuto::Length(val)
 }
 
+fn collect_all_text(node: &StyledNode) -> String {
+    let mut result = String::new();
+    collect_all_text_recursive(node, &mut result);
+    result.trim().to_string()
+}
+
+fn collect_all_text_recursive(node: &StyledNode, out: &mut String) {
+    if node.node_type == NodeType::Text {
+        let t = node.text.trim();
+        if !t.is_empty() {
+            if !out.is_empty() && !out.ends_with(' ') {
+                out.push(' ');
+            }
+            out.push_str(t);
+        }
+        return;
+    }
+    for child in &node.children {
+        collect_all_text_recursive(child, out);
+    }
+}
+
 fn extract_layout(
     tree: &TaffyTree,
     node_id: NodeId,
@@ -263,6 +286,7 @@ fn extract_layout(
         tag: styled.tag.clone(),
         attributes: styled.attributes.clone(),
         text: styled.text.clone(),
+        text_content: collect_all_text(styled),
         node_type: styled.node_type.clone(),
         style: styled.style.clone(),
         bounds: Bounds {

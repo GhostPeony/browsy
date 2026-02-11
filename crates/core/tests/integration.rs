@@ -167,3 +167,85 @@ fn test_viewport_size() {
     let dom2 = agentbrowser_core::parse(html, 1280.0, 720.0);
     assert_eq!(dom2.vp, [1280.0, 720.0]);
 }
+
+#[test]
+fn test_css_style_tag_selectors() {
+    let html = r#"
+    <html>
+    <head>
+        <style>
+            .container {
+                display: flex;
+                flex-direction: column;
+                width: 600px;
+                gap: 12px;
+                padding: 20px;
+            }
+            .btn {
+                display: flex;
+                height: 40px;
+                width: 200px;
+            }
+            .btn-primary {
+                width: 300px;
+            }
+            #submit-btn {
+                width: 400px;
+            }
+            nav a {
+                display: flex;
+                width: 100px;
+                height: 32px;
+            }
+            .hidden {
+                display: none;
+            }
+        </style>
+    </head>
+    <body>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/about">About</a>
+        </nav>
+        <div class="container">
+            <button class="btn">Cancel</button>
+            <button class="btn btn-primary">Save</button>
+            <button class="btn" id="submit-btn">Submit</button>
+            <button class="btn hidden">Ghost</button>
+        </div>
+    </body>
+    </html>
+    "#;
+
+    let dom = agentbrowser_core::parse(html, 1920.0, 1080.0);
+
+    println!("\n=== CSS Selector Test ===");
+    let compact = output::to_compact_string(&dom);
+    println!("{}", compact);
+
+    // Nav links should have width 100
+    let links: Vec<_> = dom.els.iter().filter(|e| e.tag == "a").collect();
+    assert_eq!(links.len(), 2, "Should find 2 nav links");
+    for link in &links {
+        assert_eq!(link.b[2], 100, "Nav links should be 100px wide from 'nav a' rule");
+    }
+
+    // Regular .btn should be 200px wide
+    let cancel = dom.els.iter().find(|e| e.text.as_deref() == Some("Cancel"));
+    assert!(cancel.is_some(), "Should find Cancel button");
+    assert_eq!(cancel.unwrap().b[2], 200, "Cancel should be 200px from .btn");
+
+    // .btn-primary overrides to 300px
+    let save = dom.els.iter().find(|e| e.text.as_deref() == Some("Save"));
+    assert!(save.is_some(), "Should find Save button");
+    assert_eq!(save.unwrap().b[2], 300, "Save should be 300px from .btn-primary");
+
+    // #submit-btn overrides to 400px (highest specificity)
+    let submit = dom.els.iter().find(|e| e.text.as_deref() == Some("Submit"));
+    assert!(submit.is_some(), "Should find Submit button");
+    assert_eq!(submit.unwrap().b[2], 400, "Submit should be 400px from #submit-btn");
+
+    // .hidden should not appear
+    let ghost = dom.els.iter().find(|e| e.text.as_deref() == Some("Ghost"));
+    assert!(ghost.is_none(), "Ghost button should be hidden via .hidden class");
+}

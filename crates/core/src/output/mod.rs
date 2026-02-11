@@ -109,7 +109,11 @@ fn collect_elements(
     let has_role = node.attributes.contains_key("role");
 
     if is_interactive || is_text || has_role {
-        let text_content = collect_visible_text(node);
+        let text_content = if !node.text_content.is_empty() {
+            node.text_content.clone()
+        } else {
+            collect_visible_text(node)
+        };
         let text = if text_content.is_empty() {
             None
         } else {
