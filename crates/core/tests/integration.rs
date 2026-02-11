@@ -1,6 +1,8 @@
 use browsy_core::output;
 #[cfg(feature = "fetch")]
 use browsy_core::fetch;
+#[cfg(feature = "fetch")]
+use browsy_core::fetch::Session;
 
 #[test]
 fn test_login_page_spatial_dom() {
@@ -879,4 +881,184 @@ fn test_landmark_roles() {
     for link in &links {
         assert_eq!(link.role.as_deref(), Some("link"));
     }
+}
+
+#[test]
+#[cfg(feature = "fetch")]
+fn test_session_load_html() {
+    let mut session = Session::new().unwrap();
+
+    let html = r#"
+    <html><body>
+        <h1>Hello World</h1>
+        <button>Click Me</button>
+        <a href="/about">About</a>
+    </body></html>
+    "#;
+
+    session.load_html(html, "http://localhost/test").unwrap();
+
+    let dom = session.dom().unwrap();
+    assert!(!dom.els.is_empty());
+    assert_eq!(dom.url, "http://localhost/test");
+
+    // Verify elements
+    assert!(dom.els.iter().any(|e| e.text.as_deref() == Some("Hello World")));
+    assert!(dom.els.iter().any(|e| e.text.as_deref() == Some("Click Me")));
+    assert!(dom.els.iter().any(|e| e.href.as_deref() == Some("/about")));
+}
+
+#[test]
+#[cfg(feature = "fetch")]
+fn test_session_find_helpers() {
+    let mut session = Session::new().unwrap();
+
+    let html = r#"
+    <html><body>
+        <h1>Dashboard</h1>
+        <button>Save</button>
+        <button>Delete</button>
+        <a href="/home">Home</a>
+        <input type="text" placeholder="Search" />
+    </body></html>
+    "#;
+
+    session.load_html(html, "http://localhost").unwrap();
+
+    // find_by_text
+    let save_els = session.find_by_text("Save");
+    assert_eq!(save_els.len(), 1);
+    assert_eq!(save_els[0].tag, "button");
+
+    // find_by_text partial match
+    let dashboard = session.find_by_text("Dashboard");
+    assert_eq!(dashboard.len(), 1);
+
+    // find_by_role
+    let buttons = session.find_by_role("button");
+    assert_eq!(buttons.len(), 2, "Should find 2 buttons");
+
+    let links = session.find_by_role("link");
+    assert_eq!(links.len(), 1, "Should find 1 link");
+
+    let textboxes = session.find_by_role("textbox");
+    assert_eq!(textboxes.len(), 1, "Should find 1 textbox");
+
+    // element() by ID
+    let first_id = session.dom().unwrap().els[0].id;
+    let el = session.element(first_id);
+    assert!(el.is_some());
+}
+
+#[test]
+#[cfg(feature = "fetch")]
+fn test_session_type_text() {
+    let mut session = Session::new().unwrap();
+
+    let html = r#"
+    <html><body>
+        <form>
+            <input type="text" name="username" placeholder="Username" />
+            <input type="password" name="password" placeholder="Password" />
+            <button>Login</button>
+        </form>
+    </body></html>
+    "#;
+
+    session.load_html(html, "http://localhost").unwrap();
+
+    let inputs = session.find_by_role("textbox");
+    assert_eq!(inputs.len(), 2);
+    let username_id = inputs[0].id;
+    let password_id = inputs[1].id;
+
+    // Type into username field
+    let result = session.type_text(username_id, "admin");
+    assert!(result.is_ok());
+
+    // Type into password (textbox role)
+    let result = session.type_text(password_id, "secret123");
+    assert!(result.is_ok());
+
+    // Typing into non-input should fail
+    let button_id = session.find_by_role("button")[0].id;
+    let result = session.type_text(button_id, "text");
+    assert!(result.is_err());
+}
+
+#[test]
+#[cfg(feature = "fetch")]
+fn test_session_select() {
+    let mut session = Session::new().unwrap();
+
+    let html = r#"
+    <html><body>
+        <select name="color">
+            <option value="red">Red</option>
+            <option value="blue">Blue</option>
+        </select>
+        <button>Submit</button>
+    </body></html>
+    "#;
+
+    session.load_html(html, "http://localhost").unwrap();
+
+    let selects = session.find_by_role("combobox");
+    assert_eq!(selects.len(), 1);
+    let select_id = selects[0].id;
+
+    // Select an option
+    let result = session.select(select_id, "blue");
+    assert!(result.is_ok());
+
+    // Select on non-select should fail
+    let button_id = session.find_by_role("button")[0].id;
+    let result = session.select(button_id, "val");
+    assert!(result.is_err());
+}
+
+#[test]
+#[cfg(feature = "fetch")]
+fn test_session_delta() {
+    let mut session = Session::new().unwrap();
+
+    // No delta before loading
+    assert!(session.delta().is_none());
+
+    // Load first page
+    let page1 = r#"<html><body><h1>Page 1</h1><button>Next</button></body></html>"#;
+    session.load_html(page1, "http://localhost/1").unwrap();
+
+    // Still no delta (no previous page)
+    assert!(session.delta().is_none());
+
+    // Load second page
+    let page2 = r#"<html><body><h1>Page 2</h1><button>Back</button></body></html>"#;
+    session.load_html(page2, "http://localhost/2").unwrap();
+
+    // Now we should have a delta
+    let delta = session.delta().unwrap();
+    assert!(!delta.changed.is_empty(), "Should have changed elements");
+    assert!(!delta.removed.is_empty(), "Should have removed elements");
+
+    // New heading should be in changed
+    assert!(delta.changed.iter().any(|e| e.text.as_deref() == Some("Page 2")));
+}
+
+#[test]
+#[cfg(feature = "fetch")]
+fn test_session_real_navigation() {
+    let mut session = Session::with_config(fetch::SessionConfig {
+        fetch_css: false,
+        ..Default::default()
+    }).unwrap();
+
+    session.goto("https://example.com").unwrap();
+
+    let dom = session.dom().unwrap();
+    assert!(!dom.els.is_empty());
+    assert!(session.url().unwrap().contains("example.com"));
+
+    // Should have a heading
+    assert!(dom.els.iter().any(|e| e.tag == "h1"));
 }
