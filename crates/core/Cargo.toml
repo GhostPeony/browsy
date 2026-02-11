@@ -12,6 +12,12 @@ markup5ever_rcdom = "0.36"
 taffy = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+reqwest = { version = "0.12", features = ["blocking"], optional = true }
+url = { version = "2", optional = true }
+
+[features]
+default = ["fetch"]
+fetch = ["dep:reqwest", "dep:url"]
 
 [dev-dependencies]
 pretty_assertions = "1"

@@ -2,6 +2,8 @@ pub mod dom;
 pub mod css;
 pub mod layout;
 pub mod output;
+#[cfg(feature = "fetch")]
+pub mod fetch;
 
 use output::SpatialDom;
 

@@ -216,6 +216,18 @@ pub fn compute_styles(dom: &DomNode) -> StyledNode {
     style_node(dom, &rules, &ancestors, None)
 }
 
+/// Apply styles including external CSS (fetched from <link> tags).
+pub fn compute_styles_with_external(dom: &DomNode, external_css: &str) -> StyledNode {
+    // 1. External CSS + embedded <style> tags
+    let mut css_text = external_css.to_string();
+    css_text.push('\n');
+    css_text.push_str(&extract_style_tags(dom));
+    let rules = parse_stylesheet(&css_text);
+
+    let ancestors = Vec::new();
+    style_node(dom, &rules, &ancestors, None)
+}
+
 /// Recursively extract all <style> tag content from the DOM.
 fn extract_style_tags(node: &DomNode) -> String {
     let mut css = String::new();

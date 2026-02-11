@@ -1,4 +1,6 @@
 use agentbrowser_core::output;
+#[cfg(feature = "fetch")]
+use agentbrowser_core::fetch;
 
 #[test]
 fn test_login_page_spatial_dom() {
@@ -682,4 +684,39 @@ fn test_delta_output() {
         Some("Sign Out"),
         "Changed element should be the new button"
     );
+}
+
+#[test]
+#[cfg(feature = "fetch")]
+fn test_fetch_real_page() {
+    let config = fetch::FetchConfig {
+        fetch_css: false, // Skip external CSS for speed
+        ..Default::default()
+    };
+
+    let result = fetch::fetch("https://example.com", &config);
+    assert!(result.is_ok(), "Should fetch example.com: {:?}", result.err());
+
+    let dom = result.unwrap();
+
+    println!("\n=== Real Page: example.com ===");
+    let compact = output::to_compact_string(&dom);
+    println!("{}", compact);
+    println!("URL: {}", dom.url);
+    println!("Elements: {}", dom.els.len());
+
+    // example.com has a heading and a link
+    assert!(!dom.els.is_empty(), "Should find elements on example.com");
+    assert!(
+        dom.els.iter().any(|e| e.tag == "h1"),
+        "Should find h1 heading"
+    );
+    assert!(
+        dom.els.iter().any(|e| e.tag == "a"),
+        "Should find a link"
+    );
+    assert_eq!(dom.url, "https://example.com");
+
+    let approx_tokens = compact.len() / 4;
+    println!("Approx tokens: {}", approx_tokens);
 }
