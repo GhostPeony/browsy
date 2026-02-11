@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Verify you're human</title>
+</head>
+<body>
+  <main>
+    <h1>Security Check</h1>
+    <p>Please complete the captcha challenge below to continue.</p>
+    <form action="/captcha/verify" method="post">
+      <div id="captcha-container" aria-label="Captcha challenge">
+        <p>Select all images containing traffic lights.</p>
+        <div>
+          <button type="button" aria-label="Image 1"><img src="/captcha/img/1.jpg" alt="Captcha image 1"></button>
+          <button type="button" aria-label="Image 2"><img src="/captcha/img/2.jpg" alt="Captcha image 2"></button>
+          <button type="button" aria-label="Image 3"><img src="/captcha/img/3.jpg" alt="Captcha image 3"></button>
+          <button type="button" aria-label="Image 4"><img src="/captcha/img/4.jpg" alt="Captcha image 4"></button>
+          <button type="button" aria-label="Image 5"><img src="/captcha/img/5.jpg" alt="Captcha image 5"></button>
+          <button type="button" aria-label="Image 6"><img src="/captcha/img/6.jpg" alt="Captcha image 6"></button>
+          <button type="button" aria-label="Image 7"><img src="/captcha/img/7.jpg" alt="Captcha image 7"></button>
+          <button type="button" aria-label="Image 8"><img src="/captcha/img/8.jpg" alt="Captcha image 8"></button>
+          <button type="button" aria-label="Image 9"><img src="/captcha/img/9.jpg" alt="Captcha image 9"></button>
+        </div>
+      </div>
+      <input type="hidden" name="captcha_token" value="tok_abc123">
+      <button type="submit">Verify</button>
+    </form>
+    <p>This check helps us prevent automated access to our service.</p>
+  </main>
+</body>
+</html>

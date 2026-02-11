@@ -2,6 +2,8 @@
 /// Supports: tag, .class, #id, combinators (descendant, child),
 /// comma-separated selectors, and specificity ordering.
 
+use std::collections::HashMap;
+
 /// A parsed CSS rule: selector + declarations.
 #[derive(Debug, Clone)]
 pub struct CssRule {
@@ -26,8 +28,8 @@ pub enum SelectorPart {
     Class(String),
     /// Matches an ID: `#bar`
     Id(String),
-    /// Matches an attribute: `[type="submit"]`
-    Attribute(String, Option<String>),
+    /// Matches an attribute: `[type="submit"]`, `[href^="/"]`, etc.
+    Attribute(String, AttrMatch),
     /// Descendant combinator (space)
     Descendant,
     /// Child combinator (>)
@@ -38,8 +40,27 @@ pub enum SelectorPart {
     PseudoClass(String),
 }
 
-/// Parse a CSS stylesheet string into rules.
-pub fn parse_stylesheet(css: &str) -> Vec<CssRule> {
+/// Attribute match operator.
+#[derive(Debug, Clone)]
+pub enum AttrMatch {
+    /// `[attr]` — attribute exists
+    Exists,
+    /// `[attr="value"]` — exact match
+    Exact(String),
+    /// `[attr~="value"]` — whitespace-separated word match
+    Word(String),
+    /// `[attr^="value"]` — prefix match
+    Prefix(String),
+    /// `[attr$="value"]` — suffix match
+    Suffix(String),
+    /// `[attr*="value"]` — substring match
+    Contains(String),
+    /// `[attr|="value"]` — exact or prefix with hyphen
+    HyphenPrefix(String),
+}
+
+/// Parse a CSS stylesheet string into rules, evaluating @media queries against viewport.
+pub fn parse_stylesheet(css: &str, viewport_width: f32, viewport_height: f32) -> Vec<CssRule> {
     let mut rules = Vec::new();
     let css = strip_comments(css);
 
@@ -70,7 +91,14 @@ pub fn parse_stylesheet(css: &str) -> Vec<CssRule> {
                     declarations.push(c);
                 }
 
-                if !selector_str.is_empty() && !selector_str.starts_with('@') {
+                if selector_str.starts_with("@media") {
+                    // Evaluate media query and recursively parse inner rules
+                    let condition = selector_str.trim_start_matches("@media").trim();
+                    if evaluate_media_query(condition, viewport_width, viewport_height) {
+                        let inner_rules = parse_stylesheet(&declarations, viewport_width, viewport_height);
+                        rules.extend(inner_rules);
+                    }
+                } else if !selector_str.is_empty() && !selector_str.starts_with('@') {
                     // Parse comma-separated selectors
                     for sel_str in selector_str.split(',') {
                         let sel_str = sel_str.trim();
@@ -95,6 +123,82 @@ pub fn parse_stylesheet(css: &str) -> Vec<CssRule> {
     }
 
     rules
+}
+
+/// Evaluate a media query condition against viewport dimensions.
+fn evaluate_media_query(condition: &str, viewport_width: f32, viewport_height: f32) -> bool {
+    let condition = condition.trim();
+
+    // Empty or "all" or "screen" → match
+    if condition.is_empty() || condition == "all" || condition == "screen" {
+        return true;
+    }
+
+    // "print" → never match
+    if condition == "print" {
+        return false;
+    }
+
+    // Strip optional "screen and" or "all and" prefix
+    let condition = condition
+        .strip_prefix("screen and")
+        .or_else(|| condition.strip_prefix("all and"))
+        .unwrap_or(condition)
+        .trim();
+
+    // Evaluate each "and"-separated condition
+    for part in condition.split(" and ") {
+        let part = part.trim().trim_matches('(').trim_matches(')').trim();
+        if !evaluate_media_feature(part, viewport_width, viewport_height) {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn evaluate_media_feature(feature: &str, viewport_width: f32, viewport_height: f32) -> bool {
+    let (name, value) = match feature.split_once(':') {
+        Some((n, v)) => (n.trim(), v.trim()),
+        None => {
+            // Bare feature like "screen" or "print"
+            return feature != "print";
+        }
+    };
+
+    let px_value = parse_media_px(value);
+
+    match name {
+        "min-width" => viewport_width >= px_value,
+        "max-width" => viewport_width <= px_value,
+        "min-height" => viewport_height >= px_value,
+        "max-height" => viewport_height <= px_value,
+        "width" => (viewport_width - px_value).abs() < 1.0,
+        "height" => (viewport_height - px_value).abs() < 1.0,
+        "orientation" => match value {
+            "portrait" => viewport_height > viewport_width,
+            "landscape" => viewport_width >= viewport_height,
+            _ => true,
+        },
+        _ => true, // Unknown features default to match
+    }
+}
+
+fn parse_media_px(value: &str) -> f32 {
+    let value = value.trim();
+    if value.ends_with("px") {
+        value.trim_end_matches("px").trim().parse().unwrap_or(0.0)
+    } else if value.ends_with("em") || value.ends_with("rem") {
+        let num: f32 = value
+            .trim_end_matches("rem")
+            .trim_end_matches("em")
+            .trim()
+            .parse()
+            .unwrap_or(0.0);
+        num * 16.0 // use root font size for media queries
+    } else {
+        value.parse().unwrap_or(0.0)
+    }
 }
 
 fn strip_comments(css: &str) -> String {
@@ -165,44 +269,39 @@ fn parse_selector(input: &str) -> Option<Selector> {
                 flush_tag(&mut current, &mut parts, &mut specificity);
                 chars.next();
                 let mut attr = String::new();
-                let mut value = None;
+                let mut attr_match = AttrMatch::Exists;
                 // Read until ]
                 while let Some(&c) = chars.peek() {
                     if c == ']' {
                         chars.next();
                         break;
                     }
-                    if c == '=' {
+                    if c == '~' || c == '^' || c == '$' || c == '*' || c == '|' {
+                        let op = c;
                         chars.next();
-                        let mut val = String::new();
-                        // Skip optional quotes
-                        let quote = chars.peek().copied();
-                        if quote == Some('"') || quote == Some('\'') {
+                        // Expect '=' next
+                        if chars.peek() == Some(&'=') {
                             chars.next();
-                            while let Some(&vc) = chars.peek() {
-                                if vc == quote.unwrap() {
-                                    chars.next();
-                                    break;
-                                }
-                                val.push(vc);
-                                chars.next();
-                            }
-                        } else {
-                            while let Some(&vc) = chars.peek() {
-                                if vc == ']' {
-                                    break;
-                                }
-                                val.push(vc);
-                                chars.next();
-                            }
+                            let val = read_attr_value(&mut chars);
+                            attr_match = match op {
+                                '~' => AttrMatch::Word(val),
+                                '^' => AttrMatch::Prefix(val),
+                                '$' => AttrMatch::Suffix(val),
+                                '*' => AttrMatch::Contains(val),
+                                '|' => AttrMatch::HyphenPrefix(val),
+                                _ => AttrMatch::Exists,
+                            };
                         }
-                        value = Some(val);
+                    } else if c == '=' {
+                        chars.next();
+                        let val = read_attr_value(&mut chars);
+                        attr_match = AttrMatch::Exact(val);
                     } else {
                         attr.push(c);
                         chars.next();
                     }
                 }
-                parts.push(SelectorPart::Attribute(attr.trim().to_string(), value));
+                parts.push(SelectorPart::Attribute(attr.trim().to_string(), attr_match));
                 specificity += 10;
             }
             ':' => {
@@ -294,6 +393,31 @@ fn read_ident(chars: &mut std::iter::Peekable<std::str::Chars>) -> String {
         }
     }
     name
+}
+
+fn read_attr_value(chars: &mut std::iter::Peekable<std::str::Chars>) -> String {
+    let mut val = String::new();
+    let quote = chars.peek().copied();
+    if quote == Some('"') || quote == Some('\'') {
+        chars.next();
+        while let Some(&vc) = chars.peek() {
+            if vc == quote.unwrap() {
+                chars.next();
+                break;
+            }
+            val.push(vc);
+            chars.next();
+        }
+    } else {
+        while let Some(&vc) = chars.peek() {
+            if vc == ']' {
+                break;
+            }
+            val.push(vc);
+            chars.next();
+        }
+    }
+    val.trim().to_string()
 }
 
 fn skip_whitespace(chars: &mut std::iter::Peekable<std::str::Chars>) {
@@ -428,17 +552,50 @@ fn segment_matches(
                     return false;
                 }
             }
-            SelectorPart::Attribute(attr_name, expected_value) => {
-                match expected_value {
-                    Some(val) => {
-                        if attrs.get(attr_name.as_str()).map(|v| v.as_str()) != Some(val.as_str())
-                        {
+            SelectorPart::Attribute(attr_name, attr_match) => {
+                match attr_match {
+                    AttrMatch::Exists => {
+                        if !attrs.contains_key(attr_name.as_str()) {
                             return false;
                         }
                     }
-                    None => {
-                        if !attrs.contains_key(attr_name.as_str()) {
+                    AttrMatch::Exact(val) => {
+                        if attrs.get(attr_name.as_str()).map(|v| v.as_str()) != Some(val.as_str()) {
                             return false;
+                        }
+                    }
+                    AttrMatch::Word(val) => {
+                        match attrs.get(attr_name.as_str()) {
+                            Some(v) => {
+                                if !v.split_whitespace().any(|w| w == val) {
+                                    return false;
+                                }
+                            }
+                            None => return false,
+                        }
+                    }
+                    AttrMatch::Prefix(val) => {
+                        match attrs.get(attr_name.as_str()) {
+                            Some(v) if v.starts_with(val.as_str()) => {}
+                            _ => return false,
+                        }
+                    }
+                    AttrMatch::Suffix(val) => {
+                        match attrs.get(attr_name.as_str()) {
+                            Some(v) if v.ends_with(val.as_str()) => {}
+                            _ => return false,
+                        }
+                    }
+                    AttrMatch::Contains(val) => {
+                        match attrs.get(attr_name.as_str()) {
+                            Some(v) if v.contains(val.as_str()) => {}
+                            _ => return false,
+                        }
+                    }
+                    AttrMatch::HyphenPrefix(val) => {
+                        match attrs.get(attr_name.as_str()) {
+                            Some(v) if v == val || v.starts_with(&format!("{}-", val)) => {}
+                            _ => return false,
                         }
                     }
                 }
@@ -449,4 +606,97 @@ fn segment_matches(
         }
     }
     true
+}
+
+// --- Selector indexing for fast rule lookup ---
+
+/// Index that buckets CSS rules by their rightmost simple selector component.
+/// This avoids testing every rule against every element — only potentially matching
+/// rules are checked.
+pub(crate) struct SelectorIndex {
+    by_tag: HashMap<String, Vec<usize>>,
+    by_class: HashMap<String, Vec<usize>>,
+    by_id: HashMap<String, Vec<usize>>,
+    universal: Vec<usize>,
+}
+
+enum RightmostKind {
+    Tag(String),
+    Class(String),
+    Id(String),
+    Universal,
+}
+
+fn extract_rightmost_simple(selector: &Selector) -> RightmostKind {
+    for part in selector.parts.iter().rev() {
+        match part {
+            SelectorPart::Descendant | SelectorPart::Child => continue,
+            SelectorPart::Tag(t) => return RightmostKind::Tag(t.clone()),
+            SelectorPart::Class(c) => return RightmostKind::Class(c.clone()),
+            SelectorPart::Id(i) => return RightmostKind::Id(i.clone()),
+            _ => return RightmostKind::Universal,
+        }
+    }
+    RightmostKind::Universal
+}
+
+impl SelectorIndex {
+    pub(crate) fn build(rules: &[CssRule]) -> Self {
+        let mut by_tag: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut by_class: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut by_id: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut universal: Vec<usize> = Vec::new();
+
+        for (i, rule) in rules.iter().enumerate() {
+            // Each CssRule has exactly one selector (split during parsing)
+            let kind = if let Some(sel) = rule.selectors.first() {
+                extract_rightmost_simple(sel)
+            } else {
+                RightmostKind::Universal
+            };
+
+            match kind {
+                RightmostKind::Tag(t) => by_tag.entry(t).or_default().push(i),
+                RightmostKind::Class(c) => by_class.entry(c).or_default().push(i),
+                RightmostKind::Id(id) => by_id.entry(id).or_default().push(i),
+                RightmostKind::Universal => universal.push(i),
+            }
+        }
+
+        Self { by_tag, by_class, by_id, universal }
+    }
+
+    pub(crate) fn candidates_for(&self, tag: &str, classes: &[String], id: Option<&str>) -> Vec<usize> {
+        let mut result = std::collections::HashSet::new();
+
+        for &idx in &self.universal {
+            result.insert(idx);
+        }
+
+        if let Some(indices) = self.by_tag.get(tag) {
+            for &idx in indices {
+                result.insert(idx);
+            }
+        }
+
+        for class in classes {
+            if let Some(indices) = self.by_class.get(class) {
+                for &idx in indices {
+                    result.insert(idx);
+                }
+            }
+        }
+
+        if let Some(id) = id {
+            if let Some(indices) = self.by_id.get(id) {
+                for &idx in indices {
+                    result.insert(idx);
+                }
+            }
+        }
+
+        let mut v: Vec<usize> = result.into_iter().collect();
+        v.sort_unstable();
+        v
+    }
 }

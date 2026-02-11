@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Login - MyApp</title>
+</head>
+<body>
+  <main>
+    <h1>Sign in to MyApp</h1>
+    <form action="/login" method="post">
+      <div>
+        <label for="email">Email address</label>
+        <input type="email" id="email" name="email" placeholder="you@example.com" required>
+      </div>
+      <div>
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="Password" required>
+      </div>
+      <div>
+        <label>
+          <input type="checkbox" name="remember" value="1">
+          Remember me
+        </label>
+      </div>
+      <div>
+        <button type="submit">Sign in</button>
+      </div>
+      <p><a href="/forgot-password">Forgot your password?</a></p>
+    </form>
+  </main>
+</body>
+</html>

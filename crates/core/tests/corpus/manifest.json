@@ -1,0 +1,231 @@
+{
+  "viewport": [1920.0, 1080.0],
+  "snapshots": [
+    {
+      "file": "fixture-login.html",
+      "url": "fixture://login",
+      "page_type": "Login",
+      "action_types": ["Login"],
+      "codes": [],
+      "notes": "Hand-crafted login form fixture"
+    },
+    {
+      "file": "fixture-2fa.html",
+      "url": "fixture://2fa",
+      "page_type": "TwoFactorAuth",
+      "action_types": ["EnterCode"],
+      "codes": [],
+      "notes": "Hand-crafted 2FA single input fixture"
+    },
+    {
+      "file": "fixture-2fa-separate.html",
+      "url": "fixture://2fa-separate",
+      "page_type": "TwoFactorAuth",
+      "action_types": ["EnterCode"],
+      "codes": [],
+      "notes": "Hand-crafted 2FA with 6 separate digit inputs"
+    },
+    {
+      "file": "fixture-oauth.html",
+      "url": "fixture://oauth",
+      "page_type": "OAuthConsent",
+      "action_types": ["Consent"],
+      "codes": [],
+      "notes": "Hand-crafted OAuth consent page fixture"
+    },
+    {
+      "file": "fixture-inbox.html",
+      "url": "fixture://inbox",
+      "page_type": "Inbox",
+      "action_types": ["SelectFromList"],
+      "codes": [],
+      "notes": "Hand-crafted email inbox fixture"
+    },
+    {
+      "file": "fixture-email-with-code.html",
+      "url": "fixture://email-with-code",
+      "page_type": "EmailBody",
+      "action_types": [],
+      "codes": ["482901"],
+      "notes": "Hand-crafted email body containing verification code 482901"
+    },
+    {
+      "file": "fixture-search.html",
+      "url": "fixture://search",
+      "page_type": "Search",
+      "action_types": ["Search"],
+      "codes": [],
+      "notes": "Hand-crafted search page fixture"
+    },
+    {
+      "file": "fixture-search-results.html",
+      "url": "fixture://search-results",
+      "page_type": "SearchResults",
+      "action_types": [],
+      "codes": [],
+      "notes": "Hand-crafted search results page fixture"
+    },
+    {
+      "file": "fixture-dashboard.html",
+      "url": "fixture://dashboard",
+      "page_type": "Dashboard",
+      "action_types": [],
+      "codes": [],
+      "notes": "Hand-crafted dashboard/welcome page fixture"
+    },
+    {
+      "file": "fixture-captcha.html",
+      "url": "fixture://captcha",
+      "page_type": "Captcha",
+      "action_types": [],
+      "codes": [],
+      "notes": "Hand-crafted CAPTCHA challenge fixture"
+    },
+    {
+      "file": "github-login.html",
+      "url": "https://github.com/login",
+      "page_type": "Login",
+      "action_types": ["Login"],
+      "codes": [],
+      "notes": "Standard email/password form"
+    },
+    {
+      "file": "hn-login.html",
+      "url": "https://news.ycombinator.com/login",
+      "page_type": "Login",
+      "action_types": ["Login"],
+      "codes": [],
+      "notes": "Minimal HTML login form"
+    },
+    {
+      "file": "gitlab-login.html",
+      "url": "https://gitlab.com/users/sign_in",
+      "page_type": "Login",
+      "action_types": ["Login"],
+      "skip": true,
+      "skip_reason": "Harvest got 403 Forbidden — not the real login page",
+      "notes": "GitLab blocks non-browser requests"
+    },
+    {
+      "file": "stackoverflow-login.html",
+      "url": "https://stackoverflow.com/users/login",
+      "page_type": "Login",
+      "action_types": ["Login"],
+      "codes": [],
+      "notes": "OAuth + traditional login with site nav"
+    },
+    {
+      "file": "pypi-login.html",
+      "url": "https://pypi.org/account/login/",
+      "page_type": "Login",
+      "action_types": ["Login"],
+      "codes": [],
+      "notes": "Simple login form with site nav"
+    },
+    {
+      "file": "lobsters-login.html",
+      "url": "https://lobste.rs/login",
+      "page_type": "Login",
+      "action_types": ["Login"],
+      "codes": [],
+      "notes": "Minimal login form"
+    },
+    {
+      "file": "hn-frontpage.html",
+      "url": "https://news.ycombinator.com",
+      "page_type": "List",
+      "action_types": ["SelectFromList"],
+      "codes": [],
+      "notes": "30 story links on front page"
+    },
+    {
+      "file": "lobsters-frontpage.html",
+      "url": "https://lobste.rs",
+      "page_type": "List",
+      "action_types": ["SelectFromList"],
+      "codes": [],
+      "notes": "Story links similar to HN"
+    },
+    {
+      "file": "craigslist.html",
+      "url": "https://www.craigslist.org",
+      "page_type": "List",
+      "action_types": ["SelectFromList"],
+      "codes": [],
+      "notes": "Category links homepage"
+    },
+    {
+      "file": "old-reddit.html",
+      "url": "https://old.reddit.com",
+      "page_type": "List",
+      "action_types": ["SelectFromList"],
+      "codes": [],
+      "notes": "Old reddit homepage with post links"
+    },
+    {
+      "file": "old-reddit-rust.html",
+      "url": "https://old.reddit.com/r/rust",
+      "page_type": "List",
+      "action_types": ["SelectFromList"],
+      "codes": [],
+      "notes": "Subreddit post listing"
+    },
+    {
+      "file": "wikipedia-rust.html",
+      "url": "https://en.wikipedia.org/wiki/Rust_(programming_language)",
+      "page_type": "Article",
+      "action_types": [],
+      "codes": [],
+      "notes": "Large encyclopedia article"
+    },
+    {
+      "file": "mdn-html.html",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML",
+      "page_type": "Article",
+      "action_types": [],
+      "codes": [],
+      "notes": "Technical documentation page"
+    },
+    {
+      "file": "ddg-lite.html",
+      "url": "https://lite.duckduckgo.com/lite/",
+      "page_type": "Search",
+      "action_types": ["Search"],
+      "codes": [],
+      "notes": "Lite version, no JS, just a search form"
+    },
+    {
+      "file": "bing.html",
+      "url": "https://www.bing.com",
+      "page_type": "Search",
+      "action_types": ["Search"],
+      "skip": true,
+      "skip_reason": "JS SPA — search textarea is hidden without JS execution",
+      "notes": "Standard search engine homepage"
+    },
+    {
+      "file": "example-com.html",
+      "url": "https://example.com",
+      "page_type": "Other",
+      "action_types": [],
+      "codes": [],
+      "notes": "Minimal example page"
+    },
+    {
+      "file": "httpbin-html.html",
+      "url": "https://httpbin.org/html",
+      "page_type": "Other",
+      "action_types": [],
+      "codes": [],
+      "notes": "Simple HTML test page"
+    },
+    {
+      "file": "github-anthropics.html",
+      "url": "https://github.com/anthropics",
+      "page_type": "Any",
+      "action_types": [],
+      "codes": [],
+      "notes": "GitHub org page — could be Article, List, or Other"
+    }
+  ]
+}

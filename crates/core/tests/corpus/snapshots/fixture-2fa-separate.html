@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Verify Your Identity</title>
+</head>
+<body>
+  <main>
+    <h1>Enter verification code</h1>
+    <p>We sent a 6-digit code to your email. Enter it below to continue.</p>
+    <form action="/verify" method="post">
+      <fieldset>
+        <legend>Verification code</legend>
+        <div>
+          <input type="text" name="digit1" maxlength="1" style="width: 40px" aria-label="Digit 1" required>
+          <input type="text" name="digit2" maxlength="1" style="width: 40px" aria-label="Digit 2" required>
+          <input type="text" name="digit3" maxlength="1" style="width: 40px" aria-label="Digit 3" required>
+          <input type="text" name="digit4" maxlength="1" style="width: 40px" aria-label="Digit 4" required>
+          <input type="text" name="digit5" maxlength="1" style="width: 40px" aria-label="Digit 5" required>
+          <input type="text" name="digit6" maxlength="1" style="width: 40px" aria-label="Digit 6" required>
+        </div>
+      </fieldset>
+      <div>
+        <button type="submit">Verify</button>
+      </div>
+      <p><a href="/resend-code">Resend code</a></p>
+    </form>
+  </main>
+</body>
+</html>

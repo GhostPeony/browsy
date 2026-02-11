@@ -54,16 +54,24 @@ fn build_taffy_tree(
     node: &StyledNode,
     parent_width: f32,
 ) -> NodeId {
-    // Skip display:none
+    // display:none — still build children so they appear in the output (with hidden flag)
     if node.style.display == css::Display::None {
         let taffy_style = Style {
             display: Display::None,
             ..Default::default()
         };
-        return tree.new_leaf(taffy_style).unwrap();
+        if node.children.is_empty() {
+            return tree.new_leaf(taffy_style).expect("taffy: failed to create display:none leaf");
+        }
+        let child_ids: Vec<NodeId> = node
+            .children
+            .iter()
+            .map(|c| build_taffy_tree(tree, c, 0.0))
+            .collect();
+        return tree.new_with_children(taffy_style, &child_ids).expect("taffy: failed to create display:none node");
     }
 
-    let taffy_style = to_taffy_style(&node.style);
+    let taffy_style = to_taffy_style(&node.style, parent_width);
 
     if node.children.is_empty() && node.node_type == NodeType::Text {
         // Text node — estimate size with proportional character widths
@@ -83,7 +91,7 @@ fn build_taffy_tree(
         style.min_size.width = Dimension::Length(wrapped_width.min(parent_width));
         style.size.height = Dimension::Length(wrapped_height);
 
-        return tree.new_leaf(style).unwrap();
+        return tree.new_leaf(style).expect("taffy: failed to create text leaf");
     }
 
     // For elements with only text children, estimate content size
@@ -97,6 +105,7 @@ fn build_taffy_tree(
             let avail_width = match &node.style.width {
                 css::Dimension::Px(w) => *w,
                 css::Dimension::Percent(p) => parent_width * p,
+                css::Dimension::Calc(pct, px) => pct * parent_width + px,
                 css::Dimension::Auto => parent_width,
             };
 
@@ -115,18 +124,26 @@ fn build_taffy_tree(
                 style.min_size.height = Dimension::Length(wrapped_height);
             }
 
-            return tree.new_leaf(style).unwrap();
+            return tree.new_leaf(style).expect("taffy: failed to create element leaf");
         }
     }
+
+    // Compute the width this node provides to its children for calc/% resolution
+    let child_parent_width = match &node.style.width {
+        css::Dimension::Px(w) => *w,
+        css::Dimension::Percent(p) => parent_width * p,
+        css::Dimension::Calc(pct, px) => pct * parent_width + px,
+        css::Dimension::Auto => parent_width,
+    };
 
     // Build children
     let child_ids: Vec<NodeId> = node
         .children
         .iter()
-        .map(|c| build_taffy_tree(tree, c, parent_width))
+        .map(|c| build_taffy_tree(tree, c, child_parent_width))
         .collect();
 
-    tree.new_with_children(taffy_style, &child_ids).unwrap()
+    tree.new_with_children(taffy_style, &child_ids).expect("taffy: failed to create node with children")
 }
 
 /// Measure text width using proportional character widths.
@@ -179,7 +196,7 @@ fn collect_direct_text(node: &StyledNode) -> String {
     result
 }
 
-fn to_taffy_style(style: &css::LayoutStyle) -> Style {
+fn to_taffy_style(style: &css::LayoutStyle, parent_width: f32) -> Style {
     Style {
         display: match style.display {
             css::Display::Block => Display::Block,
@@ -194,16 +211,16 @@ fn to_taffy_style(style: &css::LayoutStyle) -> Style {
             css::Position::Absolute | css::Position::Fixed => Position::Absolute,
         },
         size: Size {
-            width: to_taffy_dim(&style.width),
-            height: to_taffy_dim(&style.height),
+            width: to_taffy_dim(&style.width, parent_width),
+            height: to_taffy_dim(&style.height, parent_width),
         },
         min_size: Size {
-            width: to_taffy_dim(&style.min_width),
-            height: to_taffy_dim(&style.min_height),
+            width: to_taffy_dim(&style.min_width, parent_width),
+            height: to_taffy_dim(&style.min_height, parent_width),
         },
         max_size: Size {
-            width: to_taffy_dim(&style.max_width),
-            height: to_taffy_dim(&style.max_height),
+            width: to_taffy_dim(&style.max_width, parent_width),
+            height: to_taffy_dim(&style.max_height, parent_width),
         },
         margin: Rect {
             top: length_or_auto(style.margin.top),
@@ -224,10 +241,10 @@ fn to_taffy_style(style: &css::LayoutStyle) -> Style {
             left: LengthPercentage::Length(style.border_width.left),
         },
         inset: Rect {
-            top: to_taffy_auto_dim(&style.top),
-            right: to_taffy_auto_dim(&style.right),
-            bottom: to_taffy_auto_dim(&style.bottom),
-            left: to_taffy_auto_dim(&style.left),
+            top: to_taffy_auto_dim(&style.top, parent_width),
+            right: to_taffy_auto_dim(&style.right, parent_width),
+            bottom: to_taffy_auto_dim(&style.bottom, parent_width),
+            left: to_taffy_auto_dim(&style.left, parent_width),
         },
         flex_direction: match style.flex_direction {
             css::FlexDirection::Row => FlexDirection::Row,
@@ -242,7 +259,7 @@ fn to_taffy_style(style: &css::LayoutStyle) -> Style {
         },
         flex_grow: style.flex_grow,
         flex_shrink: style.flex_shrink,
-        flex_basis: to_taffy_dim(&style.flex_basis),
+        flex_basis: to_taffy_dim(&style.flex_basis, parent_width),
         align_items: Some(match style.align_items {
             css::AlignItems::FlexStart => AlignItems::FlexStart,
             css::AlignItems::FlexEnd => AlignItems::FlexEnd,
@@ -338,18 +355,20 @@ fn to_taffy_grid_line(placement: &Option<css::GridPlacement>) -> taffy::Line<taf
     }
 }
 
-fn to_taffy_dim(dim: &css::Dimension) -> Dimension {
+fn to_taffy_dim(dim: &css::Dimension, parent_width: f32) -> Dimension {
     match dim {
         css::Dimension::Px(v) => Dimension::Length(*v),
         css::Dimension::Percent(v) => Dimension::Percent(*v),
+        css::Dimension::Calc(pct, px) => Dimension::Length(pct * parent_width + px),
         css::Dimension::Auto => Dimension::Auto,
     }
 }
 
-fn to_taffy_auto_dim(dim: &css::Dimension) -> LengthPercentageAuto {
+fn to_taffy_auto_dim(dim: &css::Dimension, parent_width: f32) -> LengthPercentageAuto {
     match dim {
         css::Dimension::Px(v) => LengthPercentageAuto::Length(*v),
         css::Dimension::Percent(v) => LengthPercentageAuto::Percent(*v),
+        css::Dimension::Calc(pct, px) => LengthPercentageAuto::Length(pct * parent_width + px),
         css::Dimension::Auto => LengthPercentageAuto::Auto,
     }
 }

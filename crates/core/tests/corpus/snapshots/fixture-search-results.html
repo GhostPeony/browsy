@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Results - Search</title>
+</head>
+<body>
+  <header>
+    <form action="/search" method="get" role="search">
+      <label for="q">Search query</label>
+      <input type="search" id="q" name="q" value="rust web framework" placeholder="Search...">
+      <button type="submit">Search</button>
+    </form>
+  </header>
+  <main>
+    <h1>Search results for "rust web framework"</h1>
+    <div role="list" aria-label="Search results">
+      <div role="listitem">
+        <h2><a href="https://actix.rs">Actix Web - A powerful, pragmatic, and fast web framework for Rust</a></h2>
+        <p>Actix Web is a small, fast, and powerful web framework for Rust that supports async/await, middleware, and websockets.</p>
+      </div>
+      <div role="listitem">
+        <h2><a href="https://rocket.rs">Rocket - Simple, Fast, Type-Safe Web Framework for Rust</a></h2>
+        <p>Rocket is a web framework for Rust with a focus on usability, security, and speed. Write fast, secure web apps without sacrificing flexibility.</p>
+      </div>
+      <div role="listitem">
+        <h2><a href="https://github.com/tokio-rs/axum">axum - Ergonomic and modular web framework built with Tokio</a></h2>
+        <p>axum is a web application framework that focuses on ergonomics and modularity, built on top of Tokio, Tower, and Hyper.</p>
+      </div>
+      <div role="listitem">
+        <h2><a href="https://github.com/seanmonstar/warp">warp - A super-easy, composable web server framework</a></h2>
+        <p>warp is a composable, filter-based web framework built on top of hyper with a focus on correctness and simplicity.</p>
+      </div>
+      <div role="listitem">
+        <h2><a href="https://tide.rs">Tide - Fast and friendly HTTP server framework for async Rust</a></h2>
+        <p>Tide is a minimal and pragmatic Rust web application framework built for rapid development with async support.</p>
+      </div>
+      <div role="listitem">
+        <h2><a href="https://gotham.rs">Gotham - A flexible web framework for stable Rust</a></h2>
+        <p>Gotham is a flexible web framework built on stable Rust with a focus on safety, security, and correctness.</p>
+      </div>
+      <div role="listitem">
+        <h2><a href="https://docs.rs/poem/latest/poem/">Poem - A full-featured and easy-to-use web framework</a></h2>
+        <p>Poem is a web framework with OpenAPI support, built-in middleware, and support for WebSockets and SSE.</p>
+      </div>
+      <div role="listitem">
+        <h2><a href="https://salvo.rs">Salvo - A powerful and simple Rust web server framework</a></h2>
+        <p>Salvo is a Rust web framework with built-in support for HTTP/1, HTTP/2, and HTTP/3 with QUIC.</p>
+      </div>
+      <div role="listitem">
+        <h2><a href="https://www.arewewebyet.org">Are We Web Yet? - Tracking Rust's web ecosystem</a></h2>
+        <p>A community-maintained overview of the Rust web ecosystem, comparing frameworks, libraries, and tools.</p>
+      </div>
+      <div role="listitem">
+        <h2><a href="https://blog.logrocket.com/rust-web-frameworks-comparison/">Comparing Rust web frameworks - LogRocket Blog</a></h2>
+        <p>An in-depth comparison of popular Rust web frameworks including performance benchmarks and feature comparisons.</p>
+      </div>
+    </div>
+    <nav aria-label="Pagination">
+      <a href="/search?q=rust+web+framework&page=1" aria-current="page">1</a>
+      <a href="/search?q=rust+web+framework&page=2">2</a>
+      <a href="/search?q=rust+web+framework&page=3">3</a>
+      <a href="/search?q=rust+web+framework&page=2">Next</a>
+    </nav>
+  </main>
+</body>
+</html>

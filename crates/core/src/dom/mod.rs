@@ -114,12 +114,28 @@ fn convert_node(handle: &Handle) -> DomNode {
         NodeData::Element { name, attrs, .. } => {
             let tag = name.local.to_string();
 
-            // Skip script and svg content (but keep style for CSS extraction)
-            if tag == "script" || tag == "svg" || tag == "path" {
+            // Skip script content
+            if tag == "script" || tag == "path" {
                 let mut node = DomNode::new_element(&tag);
                 for attr in attrs.borrow().iter() {
                     node.attributes
                         .insert(attr.name.local.to_string(), attr.value.to_string());
+                }
+                return node;
+            }
+
+            // SVG: extract <title> text as aria-label for accessibility, discard the rest
+            if tag == "svg" {
+                let mut node = DomNode::new_element(&tag);
+                for attr in attrs.borrow().iter() {
+                    node.attributes
+                        .insert(attr.name.local.to_string(), attr.value.to_string());
+                }
+                // Look for <title> child to extract accessible name
+                if let Some(title_text) = extract_svg_title(handle) {
+                    if !node.attributes.contains_key("aria-label") {
+                        node.attributes.insert("aria-label".to_string(), title_text);
+                    }
                 }
                 return node;
             }
@@ -144,5 +160,36 @@ fn convert_node(handle: &Handle) -> DomNode {
             DomNode::new_text(&text)
         }
         _ => DomNode::new_document(), // Comments, PIs, doctypes → ignored
+    }
+}
+
+/// Extract text from a <title> child of an SVG element in the raw html5ever tree.
+fn extract_svg_title(svg_handle: &Handle) -> Option<String> {
+    for child in svg_handle.children.borrow().iter() {
+        if let NodeData::Element { name, .. } = &child.data {
+            if name.local.as_ref() == "title" {
+                let mut text = String::new();
+                collect_raw_text(child, &mut text);
+                let trimmed = text.trim().to_string();
+                if !trimmed.is_empty() {
+                    return Some(trimmed);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Collect text content from raw html5ever nodes (before conversion to DomNode).
+fn collect_raw_text(handle: &Handle, out: &mut String) {
+    match &handle.data {
+        NodeData::Text { contents } => {
+            out.push_str(&contents.borrow());
+        }
+        _ => {
+            for child in handle.children.borrow().iter() {
+                collect_raw_text(child, out);
+            }
+        }
     }
 }

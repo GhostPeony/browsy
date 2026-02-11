@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Authorize Application</title>
+</head>
+<body>
+  <main>
+    <h1>Authorize MyApp to access your account</h1>
+    <p>MyApp is requesting permission to:</p>
+    <ul>
+      <li>Read your profile information</li>
+      <li>Access your email address</li>
+      <li>Manage your repositories</li>
+    </ul>
+    <p>Authorizing will redirect you to <strong>https://myapp.example.com/callback</strong></p>
+    <form action="/oauth/authorize" method="post">
+      <input type="hidden" name="client_id" value="abc123">
+      <input type="hidden" name="redirect_uri" value="https://myapp.example.com/callback">
+      <input type="hidden" name="scope" value="profile email repos">
+      <div>
+        <button type="submit" name="action" value="allow">Allow</button>
+        <button type="submit" name="action" value="deny">Deny</button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

@@ -2,3 +2,5 @@
 Cargo.lock
 *.session
 .env
+crates/core/tests/corpus/results.json
+crates/core/tests/corpus/baseline.json

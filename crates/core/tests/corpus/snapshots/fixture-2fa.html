@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Verify Your Identity</title>
+</head>
+<body>
+  <main>
+    <h1>Enter verification code</h1>
+    <p>We sent a 6-digit code to your email. Enter it below to continue.</p>
+    <form action="/verify" method="post">
+      <div>
+        <label for="code">Verification code</label>
+        <input type="text" id="code" name="code" placeholder="Enter code" autocomplete="one-time-code" required>
+      </div>
+      <div>
+        <button type="submit">Verify</button>
+      </div>
+      <p><a href="/resend-code">Resend code</a></p>
+    </form>
+  </main>
+</body>
+</html>

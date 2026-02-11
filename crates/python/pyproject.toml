@@ -1,0 +1,27 @@
+[build-system]
+requires = ["maturin>=1,<2"]
+build-backend = "maturin"
+
+[project]
+name = "browsy"
+version = "0.1.0"
+description = "Zero-render browser engine for AI agents"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+keywords = ["browser", "ai", "agent", "scraping", "spatial-dom"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Repository = "https://github.com/anthropics/browsy"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "browsy._core"
