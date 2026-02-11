@@ -1,14 +1,17 @@
-//! Pattern-based JavaScript inference.
+//! Behavior detection — infers interactive patterns from HTML attributes.
 //!
-//! Instead of running a JS engine, we detect common JS patterns
-//! (toggle visibility, class changes, tab switching) and simulate
-//! their effects on the DOM. This gives agents a way to "click"
-//! elements and see updated DOM state without actual JS execution.
+//! This module does NOT execute JavaScript. It detects common UI patterns
+//! from HTML attributes (onclick, data-toggle, aria-controls, role="tab")
+//! and reports what interactions are available. Combined with browsy's
+//! hidden content exposure (where display:none elements are included with
+//! `hidden: true`), this gives agents full visibility into page content
+//! and available interactions without needing a JS runtime.
 
 use crate::dom::{DomNode, NodeType};
+use serde::Serialize;
 
 /// A detected interactive behavior on the page.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct JsBehavior {
     /// The element ID (from spatial DOM) that triggers this behavior.
     pub trigger_id: u32,
@@ -17,7 +20,7 @@ pub struct JsBehavior {
 }
 
 /// An inferred JS action.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum JsAction {
     /// Toggle visibility of a target element (show/hide).
     ToggleVisibility {
@@ -129,14 +132,8 @@ fn detect_behaviors_recursive(
             }
         }
 
-        // Increment ID for elements that would be in the spatial DOM
-        let tag = node.tag.as_str();
-        let is_counted = is_interactive_tag(tag)
-            || is_text_tag(tag)
-            || node.attributes.contains_key("role")
-            || node.attributes.contains_key("onclick")
-            || node.attributes.get("tabindex").is_some();
-        if is_counted {
+        // Increment ID for elements that would be emitted in the spatial DOM
+        if should_emit_node(node) {
             *id_counter += 1;
         }
     }
@@ -464,6 +461,127 @@ fn is_text_tag(tag: &str) -> bool {
         "li" | "td" | "th" | "dt" | "dd" | "figcaption" | "blockquote" |
         "pre" | "code" | "em" | "strong" | "b" | "i" | "mark" | "small"
     )
+}
+
+fn is_landmark_tag(tag: &str) -> bool {
+    matches!(tag, "nav" | "main" | "header" | "footer" | "aside" | "section" | "form")
+}
+
+const LANDMARK_ROLES: &[&str] = &[
+    "navigation", "main", "banner", "contentinfo", "complementary", "region", "form",
+];
+
+fn is_landmark_role_attr(node: &DomNode) -> bool {
+    node.get_attr("role")
+        .map(|r| LANDMARK_ROLES.contains(&r))
+        .unwrap_or(false)
+}
+
+fn should_emit_node(node: &DomNode) -> bool {
+    let tag = node.tag.as_str();
+    let is_interactive = is_interactive_tag(tag)
+        || node.attributes.contains_key("onclick")
+        || node.attributes.contains_key("role")
+        || node.attributes.get("tabindex").is_some();
+    let is_text = is_text_tag(tag);
+    let has_role = node.attributes.contains_key("role");
+    let is_landmark = is_landmark_tag(tag) || is_landmark_role_attr(node);
+    let is_img_with_alt = tag == "img" && node.attributes.contains_key("alt");
+    let should_emit = is_interactive || is_text || has_role || is_img_with_alt || is_landmark;
+
+    if !should_emit {
+        return false;
+    }
+
+    if is_landmark {
+        return true;
+    }
+
+    if is_text && !is_interactive && !has_role {
+        let text_content = node.text_content();
+        if is_trivial_text(&text_content) {
+            return false;
+        }
+    }
+
+    let has_interactive = has_interactive_descendants(node);
+    let is_wrapper = matches!(tag, "li" | "td" | "th" | "span" | "p" | "dt" | "dd");
+
+    if is_wrapper && !is_interactive && has_interactive {
+        let own_text = collect_own_text(node);
+        if own_text.is_empty() || is_trivial_text(&own_text) {
+            return false;
+        }
+    } else if is_text && !is_interactive && has_interactive {
+        let own_text = collect_own_text(node);
+        if own_text.is_empty() || is_trivial_text(&own_text) {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn has_interactive_descendants(node: &DomNode) -> bool {
+    for child in &node.children {
+        let tag = child.tag.as_str();
+        if is_interactive_tag(tag)
+            || child.attributes.contains_key("onclick")
+            || child.attributes.contains_key("role")
+            || child.attributes.get("tabindex").is_some()
+        {
+            return true;
+        }
+        if has_interactive_descendants(child) {
+            return true;
+        }
+    }
+    false
+}
+
+fn collect_own_text(node: &DomNode) -> String {
+    let mut result = String::new();
+    for child in &node.children {
+        collect_own_text_recursive(child, &mut result);
+    }
+    result.trim().to_string()
+}
+
+fn collect_own_text_recursive(node: &DomNode, out: &mut String) {
+    if node.node_type == NodeType::Text {
+        let t = node.text.trim();
+        if !t.is_empty() {
+            if !out.is_empty() && !out.ends_with(' ') {
+                out.push(' ');
+            }
+            out.push_str(t);
+        }
+        return;
+    }
+    let tag = node.tag.as_str();
+    if is_interactive_tag(tag)
+        || is_text_tag(tag)
+        || node.attributes.contains_key("onclick")
+        || node.attributes.contains_key("role")
+        || node.attributes.get("tabindex").is_some()
+    {
+        return;
+    }
+    for child in &node.children {
+        collect_own_text_recursive(child, out);
+    }
+}
+
+fn is_trivial_text(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    trimmed.chars().all(|c| matches!(
+        c,
+        '|' | '·' | '•' | '-' | '–' | '—' | '/' | '\\' | ',' | '.' | ':' | ';'
+            | '(' | ')' | '[' | ']' | '{' | '}' | ' ' | '\t' | '\n'
+    ))
 }
 
 /// Detect tab groups from the DOM (role="tablist" patterns).

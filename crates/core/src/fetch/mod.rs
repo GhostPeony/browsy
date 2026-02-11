@@ -1,478 +1,42 @@
 //! HTTP fetching, session management, and agent actions.
 //! Gated behind the "fetch" feature flag.
 
-use crate::output::{SpatialDom, SpatialElement};
+mod session;
+
+pub use session::{Session, SessionConfig, SearchEngine, SearchResult, SearchPage, InputPurpose, extract_search_results_from, extract_google_results_from};
+
+use crate::output::SpatialDom;
 use reqwest::blocking::Client;
-use std::collections::HashMap;
-use std::sync::Arc;
+use reqwest::redirect::Policy;
+use serde::Serialize;
+use std::io::Read;
+use std::net::{Ipv4Addr, Ipv6Addr};
 use url::Url;
 
-/// Configuration for a browsy session.
-pub struct SessionConfig {
-    /// Viewport width in pixels.
-    pub viewport_width: f32,
-    /// Viewport height in pixels.
-    pub viewport_height: f32,
-    /// User-Agent header.
-    pub user_agent: String,
-    /// Request timeout in seconds.
-    pub timeout_secs: u64,
-    /// Whether to fetch external CSS stylesheets.
-    pub fetch_css: bool,
-    /// Blocked URL patterns (substrings). Requests matching these are skipped.
-    pub blocked_patterns: Vec<String>,
-}
-
-impl Default for SessionConfig {
-    fn default() -> Self {
-        Self {
-            viewport_width: 1920.0,
-            viewport_height: 1080.0,
-            user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36".to_string(),
-            timeout_secs: 30,
-            fetch_css: true,
-            blocked_patterns: default_blocked_patterns(),
-        }
-    }
-}
-
-/// Default patterns to block (ads, trackers, fonts, large images).
-fn default_blocked_patterns() -> Vec<String> {
-    [
-        // Ad networks
-        "doubleclick.net", "googlesyndication.com", "googleadservices.com",
-        "adservice.google", "ads.facebook", "analytics.google",
-        // Trackers
-        "google-analytics.com", "googletagmanager.com", "facebook.net/en_US/fbevents",
-        "hotjar.com", "segment.io", "mixpanel.com", "amplitude.com",
-        // Fonts (unnecessary for layout)
-        "fonts.googleapis.com", "fonts.gstatic.com", "use.typekit.net",
-    ]
-    .iter()
-    .map(|s| s.to_string())
-    .collect()
-}
-
-/// A browsing session with cookie persistence and page state.
-pub struct Session {
-    client: Client,
-    config: SessionConfig,
-    /// Current page URL.
-    current_url: Option<Url>,
-    /// Current page DOM.
-    current_dom: Option<SpatialDom>,
-    /// Previous page DOM (for delta output).
-    previous_dom: Option<SpatialDom>,
-    /// Navigation history (URLs).
-    history: Vec<String>,
-    /// Current form field values (element_id -> value).
-    form_values: HashMap<u32, String>,
-    /// Raw HTML of current page (for form extraction).
-    current_html: Option<String>,
-}
-
-impl Session {
-    /// Create a new session with default config.
-    pub fn new() -> Result<Self, FetchError> {
-        Self::with_config(SessionConfig::default())
-    }
-
-    /// Create a new session with custom config.
-    pub fn with_config(config: SessionConfig) -> Result<Self, FetchError> {
-        let cookie_store = Arc::new(reqwest::cookie::Jar::default());
-        let client = Client::builder()
-            .user_agent(&config.user_agent)
-            .timeout(std::time::Duration::from_secs(config.timeout_secs))
-            .cookie_provider(cookie_store)
-            .build()
-            .map_err(|e| FetchError::Network(e.to_string()))?;
-
-        Ok(Self {
-            client,
-            config,
-            current_url: None,
-            current_dom: None,
-            previous_dom: None,
-            history: Vec::new(),
-            form_values: HashMap::new(),
-            current_html: None,
-        })
-    }
-
-    /// Navigate to a URL and return the Spatial DOM.
-    pub fn goto(&mut self, url: &str) -> Result<&SpatialDom, FetchError> {
-        let parsed_url = Url::parse(url).map_err(|e| FetchError::InvalidUrl(e.to_string()))?;
-
-        let response = self
-            .client
-            .get(parsed_url.as_str())
-            .send()
-            .map_err(|e| FetchError::Network(e.to_string()))?;
-
-        let status = response.status();
-        if !status.is_success() {
-            return Err(FetchError::HttpError(status.as_u16()));
-        }
-
-        let html = response
-            .text()
-            .map_err(|e| FetchError::Network(e.to_string()))?;
-
-        self.load_html(&html, url)?;
-
-        // Track history
-        self.history.push(url.to_string());
-        self.current_url = Some(parsed_url);
-
-        Ok(self.current_dom.as_ref().unwrap())
-    }
-
-    /// Load HTML content directly (without fetching).
-    pub fn load_html(&mut self, html: &str, url: &str) -> Result<&SpatialDom, FetchError> {
-        let dom_tree = crate::dom::parse_html(html);
-
-        // Fetch external CSS if enabled
-        let external_css = if self.config.fetch_css {
-            if let Ok(base_url) = Url::parse(url) {
-                fetch_external_css(&dom_tree, &base_url, &self.client, &self.config.blocked_patterns)
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
-        };
-
-        let styled = if external_css.is_empty() {
-            crate::css::compute_styles(&dom_tree)
-        } else {
-            crate::css::compute_styles_with_external(&dom_tree, &external_css)
-        };
-
-        let laid_out = crate::layout::compute_layout(
-            &styled,
-            self.config.viewport_width,
-            self.config.viewport_height,
-        );
-        let mut spatial = crate::output::generate_spatial_dom(
-            &laid_out,
-            self.config.viewport_width,
-            self.config.viewport_height,
-        );
-        spatial.url = url.to_string();
-
-        // Resolve relative URLs
-        crate::output::resolve_urls(&mut spatial, url);
-
-        // Shift previous DOM
-        self.previous_dom = self.current_dom.take();
-        self.current_dom = Some(spatial);
-        self.current_html = Some(html.to_string());
-        self.form_values.clear();
-
-        Ok(self.current_dom.as_ref().unwrap())
-    }
-
-    /// Load from a pre-parsed DOM tree (used after JS actions modify the DOM).
-    fn load_html_from_dom(&mut self, dom_tree: crate::dom::DomNode, url: &str) -> Result<&SpatialDom, FetchError> {
-        let styled = crate::css::compute_styles(&dom_tree);
-        let laid_out = crate::layout::compute_layout(
-            &styled,
-            self.config.viewport_width,
-            self.config.viewport_height,
-        );
-        let mut spatial = crate::output::generate_spatial_dom(
-            &laid_out,
-            self.config.viewport_width,
-            self.config.viewport_height,
-        );
-        spatial.url = url.to_string();
-
-        self.previous_dom = self.current_dom.take();
-        self.current_dom = Some(spatial);
-        self.form_values.clear();
-
-        Ok(self.current_dom.as_ref().unwrap())
-    }
-
-    /// Get the current page DOM.
-    pub fn dom(&self) -> Option<&SpatialDom> {
-        self.current_dom.as_ref()
-    }
-
-    /// Get the delta between current and previous page.
-    pub fn delta(&self) -> Option<crate::output::DeltaDom> {
-        match (&self.previous_dom, &self.current_dom) {
-            (Some(old), Some(new)) => Some(crate::output::diff(old, new)),
-            _ => None,
-        }
-    }
-
-    /// Get detected JS behaviors for the current page.
-    pub fn behaviors(&self) -> Vec<crate::js::JsBehavior> {
-        self.current_html
-            .as_ref()
-            .map(|html| {
-                let dom_tree = crate::dom::parse_html(html);
-                crate::js::detect_behaviors(&dom_tree)
-            })
-            .unwrap_or_default()
-    }
-
-    /// Find an element by ID in the current DOM.
-    pub fn element(&self, id: u32) -> Option<&SpatialElement> {
-        self.current_dom
-            .as_ref()
-            .and_then(|dom| dom.els.iter().find(|e| e.id == id))
-    }
-
-    /// Find elements by text content.
-    pub fn find_by_text(&self, text: &str) -> Vec<&SpatialElement> {
-        self.current_dom
-            .as_ref()
-            .map(|dom| {
-                dom.els
-                    .iter()
-                    .filter(|e| e.text.as_deref().map(|t| t.contains(text)).unwrap_or(false))
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    /// Find elements by role.
-    pub fn find_by_role(&self, role: &str) -> Vec<&SpatialElement> {
-        self.current_dom
-            .as_ref()
-            .map(|dom| {
-                dom.els
-                    .iter()
-                    .filter(|e| e.role.as_deref() == Some(role))
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    /// Click an element by ID. For links, navigates to href. For buttons
-    /// inside forms, submits the form. Returns the new DOM.
-    pub fn click(&mut self, id: u32) -> Result<&SpatialDom, FetchError> {
-        let (tag, href, is_submit) = {
-            let el = self.element(id).ok_or_else(|| {
-                FetchError::ActionError(format!("Element {} not found", id))
-            })?;
-            let is_submit = el.tag == "button"
-                || (el.tag == "input"
-                    && el.input_type.as_deref().map(|t| t == "submit").unwrap_or(false));
-            (el.tag.clone(), el.href.clone(), is_submit)
-        };
-
-        if tag == "a" {
-            if let Some(href) = href {
-                // Resolve relative URL
-                let target = if let Some(ref base) = self.current_url {
-                    base.join(&href)
-                        .map(|u| u.to_string())
-                        .unwrap_or(href)
-                } else {
-                    href
-                };
-                return self.goto(&target);
-            }
-        }
-
-        // Check for JS behaviors BEFORE form submit (onclick takes priority)
-        if let Some(html) = &self.current_html {
-            let dom_tree = crate::dom::parse_html(html);
-            let behaviors = crate::js::detect_behaviors(&dom_tree);
-            if let Some(behavior) = behaviors.iter().find(|b| b.trigger_id == id) {
-                match &behavior.action {
-                    crate::js::JsAction::Navigate { url } => {
-                        let target = if let Some(ref base) = self.current_url {
-                            base.join(url)
-                                .map(|u| u.to_string())
-                                .unwrap_or_else(|_| url.clone())
-                        } else {
-                            url.clone()
-                        };
-                        return self.goto(&target);
-                    }
-                    action => {
-                        // Apply the JS action to the DOM and re-render
-                        let modified = crate::js::apply_action(&dom_tree, action);
-                        let html_url = self.current_url.as_ref()
-                            .map(|u| u.to_string())
-                            .unwrap_or_default();
-                        return self.load_html_from_dom(modified, &html_url);
-                    }
-                }
-            }
-        }
-
-        // Form submission (after JS check, so onclick takes priority)
-        if is_submit {
-            return self.submit_form(id);
-        }
-
-        // For other elements, return current DOM
-        self.current_dom
-            .as_ref()
-            .ok_or_else(|| FetchError::ActionError("No page loaded".to_string()))
-    }
-
-    /// Type text into an input/textarea field.
-    pub fn type_text(&mut self, id: u32, text: &str) -> Result<(), FetchError> {
-        let el = self.element(id).ok_or_else(|| {
-            FetchError::ActionError(format!("Element {} not found", id))
-        })?;
-
-        if el.tag != "input" && el.tag != "textarea" {
-            return Err(FetchError::ActionError(format!(
-                "Element {} ({}) is not a text input",
-                id, el.tag
-            )));
-        }
-
-        self.form_values.insert(id, text.to_string());
-        Ok(())
-    }
-
-    /// Select an option in a select element.
-    pub fn select(&mut self, id: u32, value: &str) -> Result<(), FetchError> {
-        let el = self.element(id).ok_or_else(|| {
-            FetchError::ActionError(format!("Element {} not found", id))
-        })?;
-
-        if el.tag != "select" {
-            return Err(FetchError::ActionError(format!(
-                "Element {} ({}) is not a select",
-                id, el.tag
-            )));
-        }
-
-        self.form_values.insert(id, value.to_string());
-        Ok(())
-    }
-
-    /// Go back in navigation history.
-    pub fn back(&mut self) -> Result<&SpatialDom, FetchError> {
-        if self.history.len() < 2 {
-            return Err(FetchError::ActionError("No history to go back to".to_string()));
-        }
-        // Remove current
-        self.history.pop();
-        // Navigate to previous
-        let prev = self.history.last().unwrap().clone();
-        self.goto(&prev)
-    }
-
-    /// Get current URL.
-    pub fn url(&self) -> Option<&str> {
-        self.current_url.as_ref().map(|u| u.as_str())
-    }
-
-    /// Submit a form by finding the enclosing form and POSTing its values.
-    fn submit_form(&mut self, button_id: u32) -> Result<&SpatialDom, FetchError> {
-        let html = self.current_html.as_ref().ok_or_else(|| {
-            FetchError::ActionError("No page loaded".to_string())
-        })?.clone();
-
-        let base_url = self.current_url.clone().ok_or_else(|| {
-            FetchError::ActionError("No URL loaded".to_string())
-        })?;
-
-        // Parse the HTML to find forms and their fields
-        let dom_tree = crate::dom::parse_html(&html);
-        let forms = extract_forms(&dom_tree);
-
-        // Find which form contains our button (by matching text/position)
-        let _button_el = self.element(button_id).ok_or_else(|| {
-            FetchError::ActionError(format!("Button {} not found", button_id))
-        })?.clone();
-
-        // Use the first form (most common case), or the form with action
-        let form = forms.first().ok_or_else(|| {
-            FetchError::ActionError("No form found on page".to_string())
-        })?;
-
-        // Build form data
-        let mut form_data: Vec<(String, String)> = Vec::new();
-
-        // Add form fields from DOM defaults
-        for field in &form.fields {
-            if let Some(name) = &field.name {
-                let value = self
-                    .form_values
-                    .values()
-                    .find(|_| {
-                        // Match by placeholder/type
-                        false
-                    })
-                    .cloned()
-                    .or(field.value.clone())
-                    .unwrap_or_default();
-                form_data.push((name.clone(), value));
-            }
-        }
-
-        // Override with typed values — match by element order
-        let dom = self.current_dom.as_ref().unwrap();
-        let inputs: Vec<&SpatialElement> = dom
-            .els
-            .iter()
-            .filter(|e| e.tag == "input" || e.tag == "textarea" || e.tag == "select")
-            .collect();
-
-        for (i, input) in inputs.iter().enumerate() {
-            if let Some(typed_value) = self.form_values.get(&input.id) {
-                if i < form_data.len() {
-                    form_data[i].1 = typed_value.clone();
-                } else if let Some(name) = get_input_name_by_index(&dom_tree, i) {
-                    form_data.push((name, typed_value.clone()));
-                }
-            }
-        }
-
-        // Determine form method and action
-        let method = form.method.as_deref().unwrap_or("get").to_lowercase();
-        let action = form.action.as_deref().unwrap_or("");
-        let target_url = base_url
-            .join(action)
-            .map_err(|e| FetchError::InvalidUrl(e.to_string()))?;
-
-        // Submit
-        let response = if method == "post" {
-            self.client
-                .post(target_url.as_str())
-                .form(&form_data)
-                .send()
-                .map_err(|e| FetchError::Network(e.to_string()))?
-        } else {
-            self.client
-                .get(target_url.as_str())
-                .query(&form_data)
-                .send()
-                .map_err(|e| FetchError::Network(e.to_string()))?
-        };
-
-        let new_url = response.url().to_string();
-        let html = response
-            .text()
-            .map_err(|e| FetchError::Network(e.to_string()))?;
-
-        self.history.push(new_url.clone());
-        self.current_url = Some(Url::parse(&new_url).unwrap_or(target_url));
-        self.load_html(&html, &new_url)
-    }
-}
-
-// Legacy standalone function for backward compatibility
-/// Fetch a URL and parse it into a SpatialDom.
+/// Legacy standalone fetch — use Session for new code.
 pub fn fetch(url: &str, config: &FetchConfig) -> Result<SpatialDom, FetchError> {
+    let parsed_url = Url::parse(url).map_err(|e| FetchError::InvalidUrl(e.to_string()))?;
+    if !is_url_allowed(&parsed_url, config.allow_private_network, config.allow_non_http) {
+        return Err(FetchError::BlockedUrl(parsed_url.to_string()));
+    }
+
+    let allow_private = config.allow_private_network;
+    let allow_non_http = config.allow_non_http;
+    let max_redirects = config.max_redirects;
     let client = Client::builder()
         .user_agent(&config.user_agent)
         .timeout(std::time::Duration::from_secs(config.timeout_secs))
+        .redirect(Policy::custom(move |attempt| {
+            if attempt.previous().len() >= max_redirects {
+                return attempt.stop();
+            }
+            if !is_url_allowed(attempt.url(), allow_private, allow_non_http) {
+                return attempt.stop();
+            }
+            attempt.follow()
+        }))
         .build()
         .map_err(|e| FetchError::Network(e.to_string()))?;
-
-    let parsed_url = Url::parse(url).map_err(|e| FetchError::InvalidUrl(e.to_string()))?;
 
     let response = client
         .get(parsed_url.as_str())
@@ -484,21 +48,28 @@ pub fn fetch(url: &str, config: &FetchConfig) -> Result<SpatialDom, FetchError> 
         return Err(FetchError::HttpError(status.as_u16()));
     }
 
-    let html = response
-        .text()
-        .map_err(|e| FetchError::Network(e.to_string()))?;
+    let html = read_response_text_limited(response, config.max_response_bytes)?;
 
     let dom_tree = crate::dom::parse_html(&html);
     let external_css = if config.fetch_css {
-        fetch_external_css(&dom_tree, &parsed_url, &client, &[])
+        fetch_external_css(
+            &dom_tree,
+            &parsed_url,
+            &client,
+            &config.blocked_patterns,
+            config.max_css_bytes_total,
+            config.max_css_bytes_per_file,
+            config.allow_private_network,
+            config.allow_non_http,
+        )
     } else {
         String::new()
     };
 
     let styled = if external_css.is_empty() {
-        crate::css::compute_styles(&dom_tree)
+        crate::css::compute_styles_with_viewport(&dom_tree, config.viewport_width, config.viewport_height)
     } else {
-        crate::css::compute_styles_with_external(&dom_tree, &external_css)
+        crate::css::compute_styles_with_external_and_viewport(&dom_tree, &external_css, config.viewport_width, config.viewport_height)
     };
 
     let laid_out =
@@ -513,13 +84,19 @@ pub fn fetch(url: &str, config: &FetchConfig) -> Result<SpatialDom, FetchError> 
     Ok(spatial)
 }
 
-/// Legacy config type (use SessionConfig for new code).
 pub struct FetchConfig {
     pub viewport_width: f32,
     pub viewport_height: f32,
     pub user_agent: String,
     pub timeout_secs: u64,
     pub fetch_css: bool,
+    pub max_response_bytes: usize,
+    pub max_css_bytes_total: usize,
+    pub max_css_bytes_per_file: usize,
+    pub max_redirects: usize,
+    pub allow_private_network: bool,
+    pub allow_non_http: bool,
+    pub blocked_patterns: Vec<String>,
 }
 
 impl Default for FetchConfig {
@@ -530,28 +107,89 @@ impl Default for FetchConfig {
             user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36".to_string(),
             timeout_secs: 30,
             fetch_css: true,
+            max_response_bytes: 5 * 1024 * 1024,
+            max_css_bytes_total: 1024 * 1024,
+            max_css_bytes_per_file: 256 * 1024,
+            max_redirects: 10,
+            allow_private_network: false,
+            allow_non_http: false,
+            blocked_patterns: default_blocked_patterns(),
         }
     }
 }
 
-/// Fetch external CSS stylesheets referenced by <link> tags.
+#[derive(Debug, Serialize)]
+pub enum FetchError {
+    InvalidUrl(String),
+    BlockedUrl(String),
+    Network(String),
+    HttpError(u16),
+    ActionError(String),
+    ResponseTooLarge(u64, usize),
+}
+
+impl std::fmt::Display for FetchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FetchError::InvalidUrl(e) => write!(f, "Invalid URL: {}", e),
+            FetchError::BlockedUrl(u) => write!(f, "Blocked URL: {}", u),
+            FetchError::Network(e) => write!(f, "Network error: {}", e),
+            FetchError::HttpError(code) => write!(f, "HTTP error: {}", code),
+            FetchError::ActionError(e) => write!(f, "Action error: {}", e),
+            FetchError::ResponseTooLarge(found, max) => write!(f, "Response too large: {} bytes (max {})", found, max),
+        }
+    }
+}
+
+impl std::error::Error for FetchError {}
+
+// --- Shared helpers used by both fetch() and Session ---
+
+fn default_blocked_patterns() -> Vec<String> {
+    [
+        "doubleclick.net", "googlesyndication.com", "googleadservices.com",
+        "adservice.google", "ads.facebook", "analytics.google",
+        "google-analytics.com", "googletagmanager.com", "facebook.net/en_US/fbevents",
+        "hotjar.com", "segment.io", "mixpanel.com", "amplitude.com",
+        "fonts.googleapis.com", "fonts.gstatic.com", "use.typekit.net",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect()
+}
+
 fn fetch_external_css(
     dom: &crate::dom::DomNode,
     base_url: &Url,
     client: &Client,
     blocked: &[String],
+    max_total_bytes: usize,
+    max_per_file_bytes: usize,
+    allow_private: bool,
+    allow_non_http: bool,
 ) -> String {
     let mut css = String::new();
+    let mut remaining = max_total_bytes;
     collect_link_hrefs(dom, &mut |href| {
+        if remaining == 0 {
+            return;
+        }
         if let Ok(css_url) = base_url.join(href) {
+            if !is_url_allowed(&css_url, allow_private, allow_non_http) {
+                return;
+            }
             let url_str = css_url.as_str();
-            // Check against blocked patterns
             if blocked.iter().any(|p| url_str.contains(p.as_str())) {
                 return;
             }
             if let Ok(resp) = client.get(url_str).send() {
                 if resp.status().is_success() {
-                    if let Ok(text) = resp.text() {
+                    let limit = remaining.min(max_per_file_bytes);
+                    if limit == 0 {
+                        return;
+                    }
+                    if let Ok(text) = read_response_text_limited(resp, limit) {
+                        remaining = remaining.saturating_sub(text.len());
                         css.push_str(&text);
                         css.push('\n');
                     }
@@ -579,22 +217,31 @@ fn collect_link_hrefs(node: &crate::dom::DomNode, callback: &mut dyn FnMut(&str)
     }
 }
 
-/// A form extracted from the DOM.
-struct FormInfo {
-    action: Option<String>,
-    method: Option<String>,
-    fields: Vec<FormField>,
+// --- Form extraction helpers ---
+
+pub(crate) struct FormInfo {
+    pub action: Option<String>,
+    pub method: Option<String>,
+    pub fields: Vec<FormField>,
+    pub buttons: Vec<FormButton>,
 }
 
-struct FormField {
-    name: Option<String>,
-    value: Option<String>,
-    #[allow(dead_code)]
-    field_type: String,
+pub(crate) struct FormField {
+    pub name: Option<String>,
+    pub value: Option<String>,
+    pub field_type: String,
+    /// Whether this field is a checkbox/radio that is checked by default
+    pub checked: bool,
 }
 
-/// Extract forms from the DOM tree.
-fn extract_forms(node: &crate::dom::DomNode) -> Vec<FormInfo> {
+pub(crate) struct FormButton {
+    pub name: Option<String>,
+    pub value: Option<String>,
+    pub formaction: Option<String>,
+    pub text: Option<String>,
+}
+
+pub(crate) fn extract_forms(node: &crate::dom::DomNode) -> Vec<FormInfo> {
     let mut forms = Vec::new();
     collect_forms(node, &mut forms);
     forms
@@ -605,63 +252,102 @@ fn collect_forms(node: &crate::dom::DomNode, forms: &mut Vec<FormInfo>) {
         let action = node.get_attr("action").map(|s| s.to_string());
         let method = node.get_attr("method").map(|s| s.to_string());
         let mut fields = Vec::new();
-        collect_form_fields(node, &mut fields);
-        forms.push(FormInfo {
-            action,
-            method,
-            fields,
-        });
+        let mut buttons = Vec::new();
+        collect_form_fields(node, &mut fields, &mut buttons);
+        forms.push(FormInfo { action, method, fields, buttons });
     }
     for child in &node.children {
         collect_forms(child, forms);
     }
 }
 
-fn collect_form_fields(node: &crate::dom::DomNode, fields: &mut Vec<FormField>) {
+fn collect_form_fields(node: &crate::dom::DomNode, fields: &mut Vec<FormField>, buttons: &mut Vec<FormButton>) {
     match node.tag.as_str() {
         "input" => {
             let field_type = node.get_attr("type").unwrap_or("text").to_string();
-            // Skip submit/button/hidden types for value collection
-            if field_type != "submit" && field_type != "button" {
+            if field_type == "submit" || field_type == "button" || field_type == "image" {
+                buttons.push(FormButton {
+                    name: node.get_attr("name").map(|s| s.to_string()),
+                    value: node.get_attr("value").map(|s| s.to_string()),
+                    formaction: node.get_attr("formaction").map(|s| s.to_string()),
+                    text: node.get_attr("value").map(|s| s.to_string()),
+                });
+            } else {
+                let checked = (field_type == "checkbox" || field_type == "radio")
+                    && node.attributes.contains_key("checked");
                 fields.push(FormField {
                     name: node.get_attr("name").map(|s| s.to_string()),
                     value: node.get_attr("value").map(|s| s.to_string()),
                     field_type,
+                    checked,
                 });
             }
+        }
+        "button" => {
+            buttons.push(FormButton {
+                name: node.get_attr("name").map(|s| s.to_string()),
+                value: node.get_attr("value").map(|s| s.to_string()),
+                formaction: node.get_attr("formaction").map(|s| s.to_string()),
+                text: Some(node.text_content()),
+            });
         }
         "textarea" => {
             fields.push(FormField {
                 name: node.get_attr("name").map(|s| s.to_string()),
                 value: Some(node.text_content()),
                 field_type: "textarea".to_string(),
+                checked: false,
             });
         }
         "select" => {
-            // Find selected option
             let selected_value = find_selected_option(node);
             fields.push(FormField {
                 name: node.get_attr("name").map(|s| s.to_string()),
                 value: selected_value,
                 field_type: "select".to_string(),
+                checked: false,
             });
         }
         _ => {}
     }
     for child in &node.children {
-        collect_form_fields(child, fields);
+        collect_form_fields(child, fields, buttons);
     }
+}
+
+/// Find which form index contains a button matching the given button name/value.
+/// Falls back to form index 0 if no match found.
+pub(crate) fn find_form_index_for_button(
+    forms: &[FormInfo],
+    button_name: Option<&str>,
+    button_text: Option<&str>,
+) -> usize {
+    for (i, form) in forms.iter().enumerate() {
+        for btn in &form.buttons {
+            if let Some(name) = button_name {
+                if btn.name.as_deref() == Some(name) {
+                    return i;
+                }
+            }
+            if let Some(text) = button_text {
+                if btn.value.as_deref() == Some(text) {
+                    return i;
+                }
+                if btn.text.as_deref() == Some(text) {
+                    return i;
+                }
+            }
+        }
+    }
+    0
 }
 
 fn find_selected_option(node: &crate::dom::DomNode) -> Option<String> {
     for child in &node.children {
-        if child.tag == "option" {
-            if child.attributes.contains_key("selected") {
-                return child.get_attr("value").map(|s| s.to_string());
-            }
+        if child.tag == "option" && child.attributes.contains_key("selected") {
+            return child.get_attr("value").map(|s| s.to_string());
         }
     }
-    // Default: first option
     for child in &node.children {
         if child.tag == "option" {
             return child.get_attr("value").map(|s| s.to_string());
@@ -670,40 +356,77 @@ fn find_selected_option(node: &crate::dom::DomNode) -> Option<String> {
     None
 }
 
-fn get_input_name_by_index(node: &crate::dom::DomNode, target_index: usize) -> Option<String> {
-    let mut names = Vec::new();
-    collect_input_names(node, &mut names);
-    names.get(target_index).cloned()
-}
-
-fn collect_input_names(node: &crate::dom::DomNode, names: &mut Vec<String>) {
-    if (node.tag == "input" || node.tag == "textarea" || node.tag == "select")
-        && node.get_attr("type").unwrap_or("text") != "submit"
-    {
-        names.push(node.get_attr("name").unwrap_or("").to_string());
-    }
-    for child in &node.children {
-        collect_input_names(child, names);
-    }
-}
-
-#[derive(Debug)]
-pub enum FetchError {
-    InvalidUrl(String),
-    Network(String),
-    HttpError(u16),
-    ActionError(String),
-}
-
-impl std::fmt::Display for FetchError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FetchError::InvalidUrl(e) => write!(f, "Invalid URL: {}", e),
-            FetchError::Network(e) => write!(f, "Network error: {}", e),
-            FetchError::HttpError(code) => write!(f, "HTTP error: {}", code),
-            FetchError::ActionError(e) => write!(f, "Action error: {}", e),
+pub(crate) fn read_response_text_limited(
+    response: reqwest::blocking::Response,
+    max_bytes: usize,
+) -> Result<String, FetchError> {
+    if let Some(len) = response.content_length() {
+        if len > max_bytes as u64 {
+            return Err(FetchError::ResponseTooLarge(len, max_bytes));
         }
     }
+    let mut buf = Vec::new();
+    let mut limited = response.take(max_bytes as u64 + 1);
+    limited
+        .read_to_end(&mut buf)
+        .map_err(|e| FetchError::Network(e.to_string()))?;
+    if buf.len() > max_bytes {
+        return Err(FetchError::ResponseTooLarge(buf.len() as u64, max_bytes));
+    }
+    Ok(String::from_utf8_lossy(&buf).to_string())
 }
 
-impl std::error::Error for FetchError {}
+pub(crate) fn is_url_allowed(url: &Url, allow_private: bool, allow_non_http: bool) -> bool {
+    if !allow_non_http && !matches!(url.scheme(), "http" | "https") {
+        return false;
+    }
+    if allow_private {
+        return true;
+    }
+    if let Some(host) = url.host_str() {
+        if is_local_hostname(host) {
+            return false;
+        }
+    }
+    match url.host() {
+        Some(url::Host::Ipv4(ip)) => !is_private_ipv4(ip),
+        Some(url::Host::Ipv6(ip)) => !is_private_ipv6(ip),
+        Some(url::Host::Domain(_)) => true,
+        None => false,
+    }
+}
+
+fn is_local_hostname(host: &str) -> bool {
+    let h = host.to_lowercase();
+    h == "localhost" || h.ends_with(".localhost") || h.ends_with(".local")
+}
+
+fn is_private_ipv4(ip: Ipv4Addr) -> bool {
+    let oct = ip.octets();
+    match oct {
+        [10, ..] => true,
+        [127, ..] => true,
+        [169, 254, ..] => true,
+        [172, b, ..] if (16..=31).contains(&b) => true,
+        [192, 168, ..] => true,
+        [100, b, ..] if (64..=127).contains(&b) => true,
+        [0, ..] => true,
+        [224..=239, ..] => true,
+        [240..=255, ..] => true,
+        [192, 0, 2, ..] => true,
+        [198, 51, 100, ..] => true,
+        [203, 0, 113, ..] => true,
+        _ => false,
+    }
+}
+
+fn is_private_ipv6(ip: Ipv6Addr) -> bool {
+    if ip.is_loopback() || ip.is_unspecified() {
+        return true;
+    }
+    let segments = ip.segments();
+    let first = segments[0];
+    (first & 0xfe00) == 0xfc00
+        || (first & 0xffc0) == 0xfe80
+        || (first & 0xff00) == 0xff00
+}
