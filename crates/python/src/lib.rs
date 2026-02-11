@@ -11,7 +11,7 @@ fn convert_err(e: browsy_core::fetch::FetchError) -> PyErr {
 fn json_to_py(py: Python<'_>, val: serde_json::Value) -> PyObject {
     match val {
         serde_json::Value::Null => py.None(),
-        serde_json::Value::Bool(b) => b.into_pyobject(py).unwrap().into_any().unbind(),
+        serde_json::Value::Bool(b) => b.into_pyobject(py).unwrap().to_owned().into_any().unbind(),
         serde_json::Value::Number(n) => {
             if let Some(i) = n.as_i64() {
                 i.into_pyobject(py).unwrap().into_any().unbind()
