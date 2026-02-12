@@ -19,8 +19,16 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 
+[project.optional-dependencies]
+langchain = ["langchain>=0.1"]
+crewai = ["crewai>=0.40"]
+openai = ["openai>=1.0"]
+autogen = ["pyautogen>=0.2"]
+smolagents = ["smolagents>=1.0"]
+all = ["browsy[langchain]", "browsy[crewai]", "browsy[openai]", "browsy[autogen]", "browsy[smolagents]"]
+
 [project.urls]
-Repository = "https://github.com/anthropics/browsy"
+Repository = "https://github.com/GhostPeony/browsy"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
