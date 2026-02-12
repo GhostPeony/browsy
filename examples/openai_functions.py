@@ -1,3 +1,8 @@
+# DEPRECATED: This example has moved into the browsy package.
+# Use: from browsy.openai import get_tool_definitions, handle_tool_call
+# Install: pip install browsy[openai]
+# See: crates/python/browsy/_integrations/openai.py
+
 """
 browsy OpenAI Function Calling -- tool definitions for any OpenAI-compatible agent.
 

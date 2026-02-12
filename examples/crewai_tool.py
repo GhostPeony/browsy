@@ -1,3 +1,8 @@
+# DEPRECATED: This example has moved into the browsy package.
+# Use: from browsy.crewai import BrowsyTool
+# Install: pip install browsy[crewai]
+# See: crates/python/browsy/_integrations/crewai.py
+
 """
 browsy CrewAI Tool -- drop-in web browsing tool for CrewAI agents.
 
