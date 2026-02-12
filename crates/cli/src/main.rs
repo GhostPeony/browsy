@@ -1,3 +1,5 @@
+//! browsy CLI — fetch and parse web pages from the command line.
+
 use browsy_core::{fetch, output};
 use clap::{Parser, Subcommand};
 
@@ -47,6 +49,16 @@ enum Commands {
         /// Viewport size as WxH (default: 1920x1080)
         #[arg(long, default_value = "1920x1080")]
         viewport: String,
+    },
+    /// Start the REST API + A2A server
+    Serve {
+        /// Port to listen on (default: 3847)
+        #[arg(long, default_value = "3847")]
+        port: u16,
+
+        /// Allow fetching private/LAN addresses
+        #[arg(long)]
+        allow_private_network: bool,
     },
 }
 
@@ -110,6 +122,26 @@ fn main() {
             let dom = browsy_core::parse(&html, vw, vh);
             print_dom(&dom, json);
         }
+        Commands::Serve { port, allow_private_network } => {
+            let config = browsy_server::ServerConfig {
+                port,
+                allow_private_network,
+                ..Default::default()
+            };
+            let state = std::sync::Arc::new(browsy_server::AppState::new(config));
+            let app = browsy_server::build_router(state);
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to build tokio runtime")
+                .block_on(async move {
+                    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
+                        .await
+                        .expect("Failed to bind");
+                    eprintln!("browsy server listening on http://localhost:{port}");
+                    axum::serve(listener, app).await.expect("Server error");
+                });
+        }
     }
 }
 
@@ -128,6 +160,24 @@ fn print_dom(dom: &output::SpatialDom, as_json: bool) {
     if as_json {
         println!("{}", serde_json::to_string_pretty(dom).unwrap());
     } else {
+        if let Some(ref blocked) = dom.blocked {
+            println!("WARNING: blocked ({})", blocked.reason);
+            if !blocked.signals.is_empty() {
+                println!("signals: {}", blocked.signals.join(", "));
+            }
+            if !blocked.recommendations.is_empty() {
+                println!("recommendations:");
+                for rec in &blocked.recommendations {
+                    println!("  - {}", rec);
+                }
+            }
+            if blocked.require_human {
+                println!("requires_human: true");
+            }
+        }
+        if dom.page_type == output::PageType::Captcha {
+            println!("WARNING: captcha detected");
+        }
         if !dom.title.is_empty() {
             println!("title: {}", dom.title);
         }
