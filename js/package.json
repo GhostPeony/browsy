@@ -1,0 +1,88 @@
+{
+  "name": "browsy",
+  "version": "0.1.0",
+  "description": "Zero-render browser SDK for AI agents — core client + LangChain, OpenAI, and Vercel AI integrations",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./langchain": {
+      "types": "./dist/langchain.d.ts",
+      "import": "./dist/langchain.js"
+    },
+    "./openai": {
+      "types": "./dist/openai.d.ts",
+      "import": "./dist/openai.js"
+    },
+    "./vercel-ai": {
+      "types": "./dist/vercel-ai.d.ts",
+      "import": "./dist/vercel-ai.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "@langchain/core": ">=0.3.0",
+    "openai": ">=4.0.0",
+    "ai": ">=4.0.0",
+    "zod": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@langchain/core": {
+      "optional": true
+    },
+    "openai": {
+      "optional": true
+    },
+    "ai": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@langchain/core": "^0.3.0",
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^3.0.0",
+    "ai": "^4.0.0",
+    "openai": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "zod": "^3.23.0"
+  },
+  "keywords": [
+    "browsy",
+    "browser",
+    "ai",
+    "agent",
+    "zero-render",
+    "langchain",
+    "openai",
+    "vercel-ai",
+    "mcp",
+    "tool-use"
+  ],
+  "license": "MIT",
+  "author": "Cade Russell",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GhostPeony/browsy.git"
+  },
+  "homepage": "https://ghostpeony.github.io/browsy/"
+}

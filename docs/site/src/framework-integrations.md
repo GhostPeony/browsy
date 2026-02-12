@@ -1,10 +1,55 @@
 # Framework Integrations
 
-browsy provides native integrations for popular Python AI/agent frameworks. Each integration wraps the browsy `Browser` class as framework-compatible tools, so agents can browse the web using their native tool-calling patterns.
+browsy provides native integrations for popular AI/agent frameworks in both Python and JavaScript/TypeScript. Each integration wraps browsy as framework-compatible tools, so agents can browse the web using their native tool-calling patterns.
 
-All integrations share a lazily-initialized `Browser` instance. You can pass your own `Browser` for custom viewport configuration.
+## JavaScript / TypeScript
 
-## Installation
+The `browsy` npm package provides integrations for LangChain.js, OpenAI, and Vercel AI SDK. Install the core package and whichever framework you use:
+
+```bash
+npm install browsy                    # Core SDK
+npm install browsy @langchain/core    # + LangChain.js
+npm install browsy openai             # + OpenAI
+npm install browsy ai                 # + Vercel AI SDK
+```
+
+### LangChain.js
+
+```typescript
+import { getTools } from "browsy/langchain";
+
+const tools = getTools();  // -> 14 LangChain tool instances
+```
+
+### OpenAI function calling
+
+```typescript
+import { getToolDefinitions, handleToolCall } from "browsy/openai";
+
+const tools = getToolDefinitions();
+const result = await handleToolCall("browsy_browse", { url: "https://example.com" });
+```
+
+### Vercel AI SDK
+
+```typescript
+import { browsyTools } from "browsy/vercel-ai";
+import { generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
+
+const result = await generateText({
+  model: openai("gpt-4o"),
+  tools: browsyTools(),
+  prompt: "Go to example.com and summarize it",
+  maxSteps: 10,
+});
+```
+
+See the full [JavaScript / TypeScript guide](./javascript.md) for complete examples and API reference.
+
+---
+
+## Python
 
 Install browsy with the extras for your framework:
 
@@ -16,6 +61,8 @@ pip install browsy[autogen]     # AutoGen integration
 pip install browsy[smolagents]  # HuggingFace smolagents
 pip install browsy[all]         # All integrations
 ```
+
+All Python integrations share a lazily-initialized `Browser` instance. You can pass your own `Browser` for custom viewport configuration.
 
 ## LangChain
 

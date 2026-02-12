@@ -204,55 +204,53 @@ session.back()?;
 
 ### Framework integrations
 
-browsy integrates with popular Python AI frameworks via optional dependencies:
+browsy integrates with popular AI frameworks in both JavaScript/TypeScript and Python:
 
-**LangChain:**
+**JavaScript / TypeScript (npm):**
 ```bash
-pip install browsy[langchain]
+npm install browsy
 ```
+```typescript
+import { BrowsyClient, BrowsyContext } from "browsy";       // Core SDK
+import { getTools } from "browsy/langchain";                  // LangChain.js
+import { getToolDefinitions, handleToolCall } from "browsy/openai";  // OpenAI
+import { browsyTools } from "browsy/vercel-ai";               // Vercel AI SDK
+```
+
+**LangChain.js:**
+```typescript
+import { getTools } from "browsy/langchain";
+const tools = getTools();  // -> 14 LangChain tool instances
+```
+
+**OpenAI function calling (JS):**
+```typescript
+import { getToolDefinitions, handleToolCall } from "browsy/openai";
+const tools = getToolDefinitions();
+const result = await handleToolCall("browsy_browse", { url: "https://example.com" });
+```
+
+**Vercel AI SDK:**
+```typescript
+import { browsyTools } from "browsy/vercel-ai";
+import { generateText } from "ai";
+const result = await generateText({ model: openai("gpt-4o"), tools: browsyTools(), prompt: "..." });
+```
+
+**Python:**
+```bash
+pip install browsy[langchain]   # LangChain tools
+pip install browsy[crewai]      # CrewAI tool
+pip install browsy[openai]      # OpenAI function calling
+pip install browsy[autogen]     # AutoGen integration
+pip install browsy[smolagents]  # HuggingFace smolagents
+pip install browsy[all]         # All integrations
+```
+
 ```python
 from browsy.langchain import get_tools
 tools = get_tools()  # -> [BrowsyBrowseTool, BrowsyClickTool, ...]
 ```
-
-**CrewAI:**
-```bash
-pip install browsy[crewai]
-```
-```python
-from browsy.crewai import BrowsyTool
-tool = BrowsyTool()  # Single tool with all actions
-```
-
-**OpenAI function calling:**
-```bash
-pip install browsy[openai]
-```
-```python
-from browsy.openai import get_tool_definitions, handle_tool_call
-tools = get_tool_definitions()
-result = handle_tool_call("browsy_browse", {"url": "https://example.com"})
-```
-
-**AutoGen:**
-```bash
-pip install browsy[autogen]
-```
-```python
-from browsy.autogen import BrowsyBrowser
-browser = BrowsyBrowser()  # AutoGen-compatible agent tool
-```
-
-**Smolagents:**
-```bash
-pip install browsy[smolagents]
-```
-```python
-from browsy.smolagents import BrowsyTool
-tool = BrowsyTool()  # HuggingFace smolagents tool
-```
-
-Install all integrations at once: `pip install browsy[all]`
 
 **OpenClaw / SimpleClaw (TypeScript):**
 ```bash
@@ -452,6 +450,14 @@ browsy-core = { version = "0.1", default-features = false }
 ```rust
 let dom = browsy_core::parse(html, 1920.0, 1080.0);
 ```
+
+### As an npm package (JavaScript / TypeScript)
+
+```bash
+npm install browsy
+```
+
+The `browsy` npm package includes a core SDK plus integrations for LangChain.js, OpenAI, and Vercel AI SDK. Framework dependencies are optional peer dependencies. Requires Node.js 22+ and the browsy CLI for the REST server.
 
 ### As a Python package
 

@@ -115,6 +115,33 @@ See [Framework Integrations](framework-integrations.md) for usage guides.
 - Python 3.9+
 - No native dependencies (the compiled extension includes everything)
 
+## JavaScript / TypeScript
+
+The `browsy` npm package provides a TypeScript SDK with integrations for LangChain.js, OpenAI, and Vercel AI SDK:
+
+```bash
+npm install browsy
+```
+
+```typescript
+import { BrowsyClient, BrowsyContext } from "browsy";       // Core SDK
+import { getTools } from "browsy/langchain";                  // LangChain.js
+import { getToolDefinitions, handleToolCall } from "browsy/openai";  // OpenAI
+import { browsyTools } from "browsy/vercel-ai";               // Vercel AI SDK
+```
+
+Framework dependencies are optional peer dependencies -- install only what you need:
+
+```bash
+npm install browsy @langchain/core    # LangChain.js
+npm install browsy openai             # OpenAI
+npm install browsy ai                 # Vercel AI SDK
+```
+
+Requires Node.js 22+ and the browsy CLI (`cargo install browsy`) for the REST server.
+
+See [JavaScript / TypeScript](javascript.md) for the full SDK guide.
+
 ## MCP Server
 
 browsy ships an MCP server that exposes the full Session API as tools. This works with Claude Code, Claude Desktop, and any MCP-compatible client.
