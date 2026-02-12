@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "Zero-render browser engine for AI agents"
 requires-python = ">=3.9"
 license = {text = "MIT"}
+authors = [
+    {name = "Cade Russell"},
+]
 keywords = ["browser", "ai", "agent", "scraping", "spatial-dom"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -29,6 +32,8 @@ all = ["browsy[langchain]", "browsy[crewai]", "browsy[openai]", "browsy[autogen]
 
 [project.urls]
 Repository = "https://github.com/GhostPeony/browsy"
+Documentation = "https://ghostpeony.github.io/browsy/"
+Homepage = "https://ghostpeony.github.io/browsy/"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
