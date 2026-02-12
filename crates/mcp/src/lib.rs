@@ -392,6 +392,17 @@ impl BrowsyServer {
                 "blocked".to_string(),
                 serde_json::to_value(blocked).unwrap_or_default(),
             );
+            let next_step = if blocked.require_human {
+                "ask_human_to_solve"
+            } else if blocked.signals.iter().any(|s| s == "rate_limit") {
+                "backoff_and_retry"
+            } else {
+                "retry_with_guidance"
+            };
+            info.as_object_mut().unwrap().insert(
+                "next_step".to_string(),
+                serde_json::json!(next_step),
+            );
         }
         let text = serde_json::to_string_pretty(&info).unwrap_or_default();
         Ok(CallToolResult::success(vec![Content::text(text)]))

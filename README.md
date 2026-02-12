@@ -61,6 +61,11 @@ This prevents agents from looping blindly and reduces wasted retries.
 For shallow agents, browsy emits a single **next_step** hint (e.g., `backoff_and_retry`
 or `ask_human_to_solve`) so they can act immediately without extra reasoning.
 
+**Agent response playbook**
+- `next_step: backoff_and_retry` → wait, then retry with a new UA and reduced scope
+- `next_step: retry_with_guidance` → apply recommendations and retry once
+- `next_step: ask_human_to_solve` → request human input, then resume
+
 ### Latest benchmark snapshot (2026-02-12)
 
 - Parse i1: 823.67 ms (browsy)
