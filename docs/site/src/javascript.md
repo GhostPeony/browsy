@@ -1,11 +1,11 @@
 # JavaScript / TypeScript
 
-The `browsy` npm package provides a TypeScript SDK for the browsy REST API, plus ready-made integrations for LangChain.js, OpenAI, and Vercel AI SDK.
+The `browsy-ai` npm package provides a TypeScript SDK for the browsy REST API, plus ready-made integrations for LangChain.js, OpenAI, and Vercel AI SDK.
 
 ## Installation
 
 ```bash
-npm install browsy
+npm install browsy-ai
 ```
 
 The package uses ESM and requires Node.js 22+. Framework dependencies are optional peer dependencies — install only what you need.
@@ -15,7 +15,7 @@ The package uses ESM and requires Node.js 22+. Framework dependencies are option
 The core SDK manages the browsy server process, HTTP communication, and per-agent session isolation.
 
 ```typescript
-import { BrowsyClient, BrowsyContext, ServerManager } from "browsy";
+import { BrowsyClient, BrowsyContext, ServerManager } from "browsy-ai";
 ```
 
 ### BrowsyContext
@@ -23,7 +23,7 @@ import { BrowsyClient, BrowsyContext, ServerManager } from "browsy";
 The simplest way to use browsy. `BrowsyContext` is a facade that coordinates the client, server manager, and session manager.
 
 ```typescript
-import { BrowsyContext } from "browsy";
+import { BrowsyContext } from "browsy-ai";
 
 const ctx = new BrowsyContext({ port: 3847 });
 
@@ -40,7 +40,7 @@ console.log(info);
 Lower-level HTTP client for direct API calls. Use this when you manage the server and sessions yourself.
 
 ```typescript
-import { BrowsyClient } from "browsy";
+import { BrowsyClient } from "browsy-ai";
 
 const client = new BrowsyClient(3847);
 
@@ -60,7 +60,7 @@ const info = await client.pageInfo(res.session);
 ### Configuration
 
 ```typescript
-import { BrowsyContext } from "browsy";
+import { BrowsyContext } from "browsy-ai";
 
 const ctx = new BrowsyContext({
   port: 3847,           // REST server port (default: 3847)
@@ -87,17 +87,17 @@ const page2 = await ctx.executeToolCall("browse", { url: "https://b.com" }, "age
 ## LangChain.js
 
 ```bash
-npm install browsy @langchain/core
+npm install browsy-ai @langchain/core
 ```
 
 ```typescript
-import { getTools } from "browsy/langchain";
+import { getTools } from "browsy-ai/langchain";
 ```
 
 ### Quick start
 
 ```typescript
-import { getTools } from "browsy/langchain";
+import { getTools } from "browsy-ai/langchain";
 import { ChatOpenAI } from "@langchain/openai";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
@@ -115,8 +115,8 @@ const result = await agent.invoke({
 Pass a `BrowsyContext` for full control:
 
 ```typescript
-import { BrowsyContext } from "browsy";
-import { getTools } from "browsy/langchain";
+import { BrowsyContext } from "browsy-ai";
+import { getTools } from "browsy-ai/langchain";
 
 const ctx = new BrowsyContext({ port: 9000, autoStart: false });
 const tools = getTools(ctx);
@@ -146,18 +146,18 @@ const tools = getTools(ctx);
 ## OpenAI
 
 ```bash
-npm install browsy openai
+npm install browsy-ai openai
 ```
 
 ```typescript
-import { getToolDefinitions, handleToolCall } from "browsy/openai";
+import { getToolDefinitions, handleToolCall } from "browsy-ai/openai";
 ```
 
 ### Quick start
 
 ```typescript
 import OpenAI from "openai";
-import { getToolDefinitions, handleToolCall, createToolCallHandler } from "browsy/openai";
+import { getToolDefinitions, handleToolCall, createToolCallHandler } from "browsy-ai/openai";
 
 const client = new OpenAI();
 const tools = getToolDefinitions();
@@ -203,7 +203,7 @@ console.log(response.choices[0].message.content);
 Use `createToolCallHandler()` to get a pre-bound handler:
 
 ```typescript
-import { getToolDefinitions, createToolCallHandler } from "browsy/openai";
+import { getToolDefinitions, createToolCallHandler } from "browsy-ai/openai";
 
 const tools = getToolDefinitions();
 const handle = createToolCallHandler({ port: 3847 });
@@ -215,11 +215,11 @@ const result = await handle(toolCall.function.name, args);
 ## Vercel AI SDK
 
 ```bash
-npm install browsy ai
+npm install browsy-ai ai
 ```
 
 ```typescript
-import { browsyTools } from "browsy/vercel-ai";
+import { browsyTools } from "browsy-ai/vercel-ai";
 ```
 
 ### Quick start
@@ -227,7 +227,7 @@ import { browsyTools } from "browsy/vercel-ai";
 ```typescript
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { browsyTools } from "browsy/vercel-ai";
+import { browsyTools } from "browsy-ai/vercel-ai";
 
 const result = await generateText({
   model: openai("gpt-4o"),
@@ -242,8 +242,8 @@ console.log(result.text);
 ### Custom context
 
 ```typescript
-import { BrowsyContext } from "browsy";
-import { browsyTools } from "browsy/vercel-ai";
+import { BrowsyContext } from "browsy-ai";
+import { browsyTools } from "browsy-ai/vercel-ai";
 
 const ctx = new BrowsyContext({ port: 9000 });
 const tools = browsyTools(ctx);
@@ -261,7 +261,7 @@ import {
   SearchParams,
   TOOL_DESCRIPTIONS,
   TOOL_SCHEMAS,
-} from "browsy";
+} from "browsy-ai";
 
 // Use in your own tool definitions
 const parsed = BrowseParams.parse({ url: "https://example.com" });

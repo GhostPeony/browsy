@@ -1,5 +1,5 @@
 {
-  "name": "browsy",
+  "name": "browsy-ai",
   "version": "0.1.0",
   "description": "Zero-render browser SDK for AI agents — core client + LangChain, OpenAI, and Vercel AI integrations",
   "type": "module",

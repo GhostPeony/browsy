@@ -117,25 +117,25 @@ See [Framework Integrations](framework-integrations.md) for usage guides.
 
 ## JavaScript / TypeScript
 
-The `browsy` npm package provides a TypeScript SDK with integrations for LangChain.js, OpenAI, and Vercel AI SDK:
+The `browsy-ai` npm package provides a TypeScript SDK with integrations for LangChain.js, OpenAI, and Vercel AI SDK:
 
 ```bash
-npm install browsy
+npm install browsy-ai
 ```
 
 ```typescript
-import { BrowsyClient, BrowsyContext } from "browsy";       // Core SDK
-import { getTools } from "browsy/langchain";                  // LangChain.js
-import { getToolDefinitions, handleToolCall } from "browsy/openai";  // OpenAI
-import { browsyTools } from "browsy/vercel-ai";               // Vercel AI SDK
+import { BrowsyClient, BrowsyContext } from "browsy-ai";       // Core SDK
+import { getTools } from "browsy-ai/langchain";                  // LangChain.js
+import { getToolDefinitions, handleToolCall } from "browsy-ai/openai";  // OpenAI
+import { browsyTools } from "browsy-ai/vercel-ai";               // Vercel AI SDK
 ```
 
 Framework dependencies are optional peer dependencies -- install only what you need:
 
 ```bash
-npm install browsy @langchain/core    # LangChain.js
-npm install browsy openai             # OpenAI
-npm install browsy ai                 # Vercel AI SDK
+npm install browsy-ai @langchain/core    # LangChain.js
+npm install browsy-ai openai             # OpenAI
+npm install browsy-ai ai                 # Vercel AI SDK
 ```
 
 Requires Node.js 22+ and the browsy CLI (`cargo install browsy`) for the REST server.

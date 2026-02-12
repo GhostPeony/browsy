@@ -208,31 +208,31 @@ browsy integrates with popular AI frameworks in both JavaScript/TypeScript and P
 
 **JavaScript / TypeScript (npm):**
 ```bash
-npm install browsy
+npm install browsy-ai
 ```
 ```typescript
-import { BrowsyClient, BrowsyContext } from "browsy";       // Core SDK
-import { getTools } from "browsy/langchain";                  // LangChain.js
-import { getToolDefinitions, handleToolCall } from "browsy/openai";  // OpenAI
-import { browsyTools } from "browsy/vercel-ai";               // Vercel AI SDK
+import { BrowsyClient, BrowsyContext } from "browsy-ai";       // Core SDK
+import { getTools } from "browsy-ai/langchain";                  // LangChain.js
+import { getToolDefinitions, handleToolCall } from "browsy-ai/openai";  // OpenAI
+import { browsyTools } from "browsy-ai/vercel-ai";               // Vercel AI SDK
 ```
 
 **LangChain.js:**
 ```typescript
-import { getTools } from "browsy/langchain";
+import { getTools } from "browsy-ai/langchain";
 const tools = getTools();  // -> 14 LangChain tool instances
 ```
 
 **OpenAI function calling (JS):**
 ```typescript
-import { getToolDefinitions, handleToolCall } from "browsy/openai";
+import { getToolDefinitions, handleToolCall } from "browsy-ai/openai";
 const tools = getToolDefinitions();
 const result = await handleToolCall("browsy_browse", { url: "https://example.com" });
 ```
 
 **Vercel AI SDK:**
 ```typescript
-import { browsyTools } from "browsy/vercel-ai";
+import { browsyTools } from "browsy-ai/vercel-ai";
 import { generateText } from "ai";
 const result = await generateText({ model: openai("gpt-4o"), tools: browsyTools(), prompt: "..." });
 ```
@@ -454,10 +454,10 @@ let dom = browsy_core::parse(html, 1920.0, 1080.0);
 ### As an npm package (JavaScript / TypeScript)
 
 ```bash
-npm install browsy
+npm install browsy-ai
 ```
 
-The `browsy` npm package includes a core SDK plus integrations for LangChain.js, OpenAI, and Vercel AI SDK. Framework dependencies are optional peer dependencies. Requires Node.js 22+ and the browsy CLI for the REST server.
+The `browsy-ai` npm package includes a core SDK plus integrations for LangChain.js, OpenAI, and Vercel AI SDK. Framework dependencies are optional peer dependencies. Requires Node.js 22+ and the browsy CLI for the REST server.
 
 ### As a Python package
 

@@ -4,19 +4,19 @@ browsy provides native integrations for popular AI/agent frameworks in both Pyth
 
 ## JavaScript / TypeScript
 
-The `browsy` npm package provides integrations for LangChain.js, OpenAI, and Vercel AI SDK. Install the core package and whichever framework you use:
+The `browsy-ai` npm package provides integrations for LangChain.js, OpenAI, and Vercel AI SDK. Install the core package and whichever framework you use:
 
 ```bash
-npm install browsy                    # Core SDK
-npm install browsy @langchain/core    # + LangChain.js
-npm install browsy openai             # + OpenAI
-npm install browsy ai                 # + Vercel AI SDK
+npm install browsy-ai                    # Core SDK
+npm install browsy-ai @langchain/core    # + LangChain.js
+npm install browsy-ai openai             # + OpenAI
+npm install browsy-ai ai                 # + Vercel AI SDK
 ```
 
 ### LangChain.js
 
 ```typescript
-import { getTools } from "browsy/langchain";
+import { getTools } from "browsy-ai/langchain";
 
 const tools = getTools();  // -> 14 LangChain tool instances
 ```
@@ -24,7 +24,7 @@ const tools = getTools();  // -> 14 LangChain tool instances
 ### OpenAI function calling
 
 ```typescript
-import { getToolDefinitions, handleToolCall } from "browsy/openai";
+import { getToolDefinitions, handleToolCall } from "browsy-ai/openai";
 
 const tools = getToolDefinitions();
 const result = await handleToolCall("browsy_browse", { url: "https://example.com" });
@@ -33,7 +33,7 @@ const result = await handleToolCall("browsy_browse", { url: "https://example.com
 ### Vercel AI SDK
 
 ```typescript
-import { browsyTools } from "browsy/vercel-ai";
+import { browsyTools } from "browsy-ai/vercel-ai";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
