@@ -36,6 +36,10 @@ enum Commands {
         /// Only include above-fold elements
         #[arg(long)]
         above_fold: bool,
+
+        /// Allow fetching private/LAN addresses (e.g., localhost)
+        #[arg(long)]
+        allow_private_network: bool,
     },
     /// Parse a local HTML string and output the Spatial DOM
     Parse {
@@ -85,12 +89,14 @@ fn main() {
             no_css,
             visible_only,
             above_fold,
+            allow_private_network,
         } => {
             let (vw, vh) = parse_viewport(&viewport);
             let config = fetch::FetchConfig {
                 viewport_width: vw,
                 viewport_height: vh,
                 fetch_css: !no_css,
+                allow_private_network,
                 ..Default::default()
             };
 
@@ -176,6 +182,14 @@ fn print_dom(dom: &output::SpatialDom, as_json: bool) {
             if blocked.require_human {
                 println!("requires_human: true");
             }
+            let next_step = if blocked.require_human {
+                "ask_human_to_solve"
+            } else if blocked.signals.iter().any(|s| s == "rate_limit") {
+                "backoff_and_retry"
+            } else {
+                "retry_with_guidance"
+            };
+            println!("next_step: {}", next_step);
         }
         if dom.page_type == output::PageType::Captcha {
             println!("WARNING: captcha detected");

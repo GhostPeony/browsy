@@ -1,0 +1,27 @@
+{
+  "date": "2026-02-12",
+  "iterations": 3,
+  "parallel_instances": [1, 5, 10],
+  "browsy": {
+    "parse_input_html": "C:\\Users\\Cade\\Projects\\agentbrowser\\crates\\core\\tests\\corpus\\snapshots\\wikipedia-rust.html",
+    "fetch_url": "https://httpbin.org/forms/post"
+  },
+  "competitors": {
+    "agent_browser": {
+      "url": "https://httpbin.org/forms/post"
+    },
+    "playwright": {
+      "url": "https://httpbin.org/forms/post"
+    }
+  },
+  "report": {
+    "fail_on_regression": true,
+    "thresholds": {
+      "p95_ms_pct": 0.15,
+      "mean_ms_pct": 0.10,
+      "peak_mem_pct": 0.15,
+      "blocked_rate_abs": 0.02,
+      "token_avg_pct": 0.10
+    }
+  }
+}

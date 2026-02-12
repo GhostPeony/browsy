@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Name and Identity - GovForm Lab</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Name and identity</h1>
+    <form action="/forms/benefits-step1.html" method="post">
+      <label for="first">First name</label><br />
+      <input id="first" name="first_name" type="text" required /><br /><br />
+
+      <label for="middle">Middle name (optional)</label><br />
+      <input id="middle" name="middle_name" type="text" /><br /><br />
+
+      <label for="last">Last name</label><br />
+      <input id="last" name="last_name" type="text" required /><br /><br />
+
+      <label for="dob">Date of birth</label><br />
+      <input id="dob" name="dob" type="date" required /><br /><br />
+
+      <fieldset>
+        <legend>Preferred contact method</legend>
+        <label><input type="radio" name="contact" value="email" /> Email</label><br />
+        <label><input type="radio" name="contact" value="phone" /> Phone</label>
+      </fieldset><br />
+
+      <button type="submit">Continue</button>
+    </form>
+  </body>
+</html>

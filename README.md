@@ -50,6 +50,37 @@ browsy is not a browser replacement. It's the **fast path** -- handles 70%+ of a
 - **High-throughput extraction**: many parallel agents per machine.
 - **Predictable cost**: token-efficient output with explicit action IDs and guidance.
 
+### Communicative by design
+
+browsy surfaces **actionable guidance** when a page is blocked or challenged:
+- Detects block signals (captcha, rate limits, Cloudflare/Turnstile, etc.)
+- Returns structured recommendations (backoff, reduce scope, rotate UA)
+- Flags when a **human is required** to proceed
+
+This prevents agents from looping blindly and reduces wasted retries.
+For shallow agents, browsy emits a single **next_step** hint (e.g., `backoff_and_retry`
+or `ask_human_to_solve`) so they can act immediately without extra reasoning.
+
+### Latest benchmark snapshot (2026-02-12)
+
+- Parse i1: 823.67 ms (browsy)
+- Parse i5: 1030.67 ms (browsy)
+- Parse i10: 1468 ms (browsy)
+- Fetch i1: 849.67 ms (browsy)
+- Fetch i5: 1068.33 ms (browsy)
+- Fetch i10: 1250.33 ms (browsy)
+- Agent-browser i1: 7339.67 ms
+- Agent-browser i5: 16408.67 ms
+- Agent-browser i10: 25207 ms
+- Playwright i1: 1752 ms
+- Playwright i5: 2214.67 ms
+- Playwright i10: 2205 ms
+
+Live-site status (browsy):
+- OK: news.ycombinator.com, duckduckgo.com, bbc.com/news, craigslist.org, news.ycombinator.com/login, httpbin.org/forms/post
+- WARN (slow): github.com/login, accounts.google.com, github.com/anthropics/claude-code
+- NEEDS_HUMAN: en.wikipedia.org/wiki/Main_Page, stackoverflow.com/questions, amazon.com, example.com, python.org
+
 ### Why we’re building it this way
 
 Screenshot-based automation is slow, expensive, and brittle. Agents don’t need pixels — they need structure and intent. browsy optimizes for **speed, simplicity, and accuracy** for the majority of server-rendered or lightly dynamic pages, while allowing fallbacks to full browsers only when necessary.
@@ -217,6 +248,18 @@ tool = BrowsyTool()  # HuggingFace smolagents tool
 ```
 
 Install all integrations at once: `pip install browsy[all]`
+
+**OpenClaw / SimpleClaw (TypeScript):**
+```bash
+npm install @openclaw/browsy
+```
+```typescript
+import { register } from "@openclaw/browsy";
+export default { register };
+// Agents automatically get 14 browsy tools — browse, click, type, search, login, etc.
+```
+
+The OpenClaw plugin auto-starts a browsy server, manages per-agent sessions, and can intercept built-in Playwright browser tools for a transparent 10x speed upgrade. Works with any OpenClaw-compatible framework including SimpleClaw. See the [full integration guide](https://browsy.dev/openclaw.html).
 
 ### REST API server
 

@@ -340,6 +340,70 @@
       "action_types": ["CaptchaChallenge"],
       "codes": [],
       "notes": "Cloudflare Turnstile verification — detected via cf-turnstile class and script src"
+    },
+    {
+      "file": "sign-in.html",
+      "url": "fixture://govform/sign-in",
+      "page_type": "Login",
+      "action_types": ["Login"],
+      "codes": [],
+      "notes": "GovForm Lab sign-in page"
+    },
+    {
+      "file": "name.html",
+      "url": "fixture://govform/name",
+      "page_type": "Form",
+      "action_types": ["FillForm"],
+      "codes": [],
+      "notes": "GovForm Lab name/identity form"
+    },
+    {
+      "file": "benefits-step1.html",
+      "url": "fixture://govform/benefits-step1",
+      "page_type": "Form",
+      "action_types": ["FillForm"],
+      "codes": [],
+      "notes": "GovForm Lab benefits intake step 1"
+    },
+    {
+      "file": "benefits-step2.html",
+      "url": "fixture://govform/benefits-step2",
+      "page_type": "Form",
+      "action_types": ["FillForm"],
+      "codes": [],
+      "notes": "GovForm Lab benefits intake step 2"
+    },
+    {
+      "file": "health-intake.html",
+      "url": "fixture://govform/health-intake",
+      "page_type": "Form",
+      "action_types": ["FillForm"],
+      "codes": [],
+      "notes": "GovForm Lab health intake form"
+    },
+    {
+      "file": "consent.html",
+      "url": "fixture://govform/consent",
+      "page_type": "Form",
+      "action_types": ["FillForm"],
+      "codes": [],
+      "notes": "GovForm Lab privacy/consent form"
+    },
+    {
+      "file": "upload.html",
+      "url": "fixture://govform/upload",
+      "page_type": "Form",
+      "action_types": ["FillForm"],
+      "codes": [],
+      "notes": "GovForm Lab upload form (mock)"
+    },
+    {
+      "file": "errors.html",
+      "url": "fixture://govform/errors",
+      "page_type": "Error",
+      "action_types": ["FillForm"],
+      "codes": [],
+      "notes": "GovForm Lab validation errors demo"
     }
   ]
 }

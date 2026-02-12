@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Secure Sign In - GovForm Lab</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Sign in</h1>
+    <p>Access your account using email and password.</p>
+    <form action="/forms/consent.html" method="post">
+      <label for="email">Email address</label><br />
+      <input id="email" name="email" type="email" required /><br /><br />
+
+      <label for="password">Password</label><br />
+      <input id="password" name="password" type="password" required /><br /><br />
+
+      <label>
+        <input type="checkbox" name="remember_me" />
+        Remember this device
+      </label><br /><br />
+
+      <button type="submit">Sign in</button>
+    </form>
+  </body>
+</html>

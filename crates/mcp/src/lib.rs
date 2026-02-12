@@ -151,6 +151,14 @@ fn blocked_warning(dom: &output::SpatialDom) -> Option<String> {
     if info.require_human {
         text.push_str("requires_human: true\n");
     }
+    let next_step = if info.require_human {
+        "ask_human_to_solve"
+    } else if info.signals.iter().any(|s| s == "rate_limit") {
+        "backoff_and_retry"
+    } else {
+        "retry_with_guidance"
+    };
+    text.push_str(&format!("next_step: {}\n", next_step));
     Some(text)
 }
 

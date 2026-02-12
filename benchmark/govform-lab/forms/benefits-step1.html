@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Benefits Intake - Step 1</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Benefits intake (Step 1)</h1>
+    <form action="/forms/benefits-step2.html" method="post">
+      <label for="address1">Street address</label><br />
+      <input id="address1" name="address1" type="text" required /><br /><br />
+
+      <label for="city">City</label><br />
+      <input id="city" name="city" type="text" required /><br /><br />
+
+      <label for="state">State</label><br />
+      <select id="state" name="state" required>
+        <option value="">Select</option>
+        <option>AL</option><option>AK</option><option>AZ</option><option>CA</option>
+        <option>NY</option><option>TX</option><option>WA</option>
+      </select><br /><br />
+
+      <label for="zip">ZIP code</label><br />
+      <input id="zip" name="zip" type="text" required /><br /><br />
+
+      <label>
+        <input type="checkbox" name="mailing_same" checked />
+        Mailing address is the same
+      </label><br /><br />
+
+      <button type="submit">Continue</button>
+    </form>
+  </body>
+</html>
