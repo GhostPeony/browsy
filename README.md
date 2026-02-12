@@ -263,7 +263,7 @@ export default { register };
 // Agents automatically get 14 browsy tools — browse, click, type, search, login, etc.
 ```
 
-The OpenClaw plugin auto-starts a browsy server, manages per-agent sessions, and can intercept built-in Playwright browser tools for a transparent 10x speed upgrade. Works with any OpenClaw-compatible framework including SimpleClaw. See the [full integration guide](https://browsy.dev/openclaw.html).
+The OpenClaw plugin auto-starts a browsy server, manages per-agent sessions, and can intercept built-in Playwright browser tools for a transparent 10x speed upgrade. Works with any OpenClaw-compatible framework including SimpleClaw. See the [full integration guide](https://ghostpeony.github.io/browsy/openclaw.html).
 
 ### REST API server
 

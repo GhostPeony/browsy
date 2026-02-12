@@ -1,6 +1,6 @@
 {
   "name": "browsy-ai",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Zero-render browser SDK for AI agents — core client + LangChain, OpenAI, and Vercel AI integrations",
   "type": "module",
   "main": "./dist/index.js",

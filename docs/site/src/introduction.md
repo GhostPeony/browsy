@@ -1,5 +1,7 @@
 # browsy
 
+![browsy](https://github.com/user-attachments/assets/7b3984d9-14a0-4457-9949-427a2aff7686)
+
 **Zero-render browser engine for AI agents.**
 
 browsy converts web pages into a structured **Spatial DOM** -- a flat list of interactive and text elements with bounding boxes, roles, and states -- without rendering pixels. On top of this, it layers **page intelligence**: automatic page type detection, suggested actions with stable element IDs, CAPTCHA detection, and hidden content exposure.
