@@ -146,7 +146,7 @@ for (const { name, method, schema } of TOOL_SCHEMAS) {
 
 ## Documentation
 
-Full documentation at [browsy.dev](https://browsy.dev)
+Full documentation at [ghostpeony.github.io/browsy](https://ghostpeony.github.io/browsy/)
 
 - [JavaScript / TypeScript Guide](https://ghostpeony.github.io/browsy/javascript.html)
 - [Framework Integrations](https://ghostpeony.github.io/browsy/framework-integrations.html)
