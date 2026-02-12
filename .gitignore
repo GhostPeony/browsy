@@ -7,3 +7,4 @@ crates/core/tests/corpus/baseline.json
 __pycache__/
 *.pyd
 nul
+docs/site/book/
