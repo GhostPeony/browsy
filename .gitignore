@@ -4,3 +4,6 @@ Cargo.lock
 .env
 crates/core/tests/corpus/results.json
 crates/core/tests/corpus/baseline.json
+__pycache__/
+*.pyd
+nul
