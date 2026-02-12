@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Health Intake Form</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Health intake</h1>
+    <form action="/forms/consent.html" method="post">
+      <label for="patient-name">Full name</label><br />
+      <input id="patient-name" name="patient_name" type="text" required /><br /><br />
+
+      <label for="patient-phone">Phone</label><br />
+      <input id="patient-phone" name="patient_phone" type="tel" required /><br /><br />
+
+      <label for="symptoms">Symptoms</label><br />
+      <textarea id="symptoms" name="symptoms" rows="4"></textarea><br /><br />
+
+      <fieldset>
+        <legend>Urgency</legend>
+        <label><input type="radio" name="urgency" value="low" /> Low</label><br />
+        <label><input type="radio" name="urgency" value="medium" /> Medium</label><br />
+        <label><input type="radio" name="urgency" value="high" /> High</label>
+      </fieldset><br />
+
+      <label>
+        <input type="checkbox" name="consent_share" />
+        I consent to share my information with providers
+      </label><br /><br />
+
+      <button type="submit">Submit intake</button>
+    </form>
+  </body>
+</html>

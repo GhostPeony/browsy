@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Validation Errors</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Application submission</h1>
+    <div role="alert" aria-live="polite">
+      There were errors with your submission. Please review the fields below.
+    </div>
+    <form action="/forms/sign-in.html" method="post">
+      <label for="email">Email</label><br />
+      <input id="email" name="email" type="email" aria-invalid="true" /><br />
+      <span role="alert">Enter a valid email address.</span><br /><br />
+
+      <label for="zip">ZIP code</label><br />
+      <input id="zip" name="zip" type="text" aria-invalid="true" /><br />
+      <span role="alert">ZIP code is required.</span><br /><br />
+
+      <button type="submit">Fix and continue</button>
+    </form>
+  </body>
+</html>

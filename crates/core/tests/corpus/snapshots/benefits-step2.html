@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Benefits Intake - Step 2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Benefits intake (Step 2)</h1>
+    <form action="/forms/consent.html" method="post">
+      <label for="income">Monthly household income</label><br />
+      <input id="income" name="income" type="number" required /><br /><br />
+
+      <label for="household">Household size</label><br />
+      <select id="household" name="household" required>
+        <option value="">Select</option>
+        <option>1</option><option>2</option><option>3</option><option>4</option>
+        <option>5</option><option>6+</option>
+      </select><br /><br />
+
+      <fieldset>
+        <legend>Program interest</legend>
+        <label><input type="checkbox" name="programs" value="medical" /> Medical assistance</label><br />
+        <label><input type="checkbox" name="programs" value="food" /> Food assistance</label><br />
+        <label><input type="checkbox" name="programs" value="housing" /> Housing support</label>
+      </fieldset><br />
+
+      <button type="submit">Continue</button>
+    </form>
+  </body>
+</html>

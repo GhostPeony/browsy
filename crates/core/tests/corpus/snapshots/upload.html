@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Document Upload</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Upload documents</h1>
+    <form action="/forms/errors.html" method="post">
+      <label for="doc-type">Document type</label><br />
+      <select id="doc-type" name="doc_type" required>
+        <option value="">Select</option>
+        <option>Proof of identity</option>
+        <option>Proof of income</option>
+        <option>Residency verification</option>
+      </select><br /><br />
+
+      <label for="file">Choose file</label><br />
+      <input id="file" name="file" type="file" /><br /><br />
+
+      <button type="submit">Upload</button>
+    </form>
+  </body>
+</html>
