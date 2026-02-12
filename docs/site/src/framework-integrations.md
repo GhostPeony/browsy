@@ -304,6 +304,23 @@ browser = Browser(viewport_width=1920, viewport_height=1080)
 tool = BrowsyTool(browser=browser)
 ```
 
+## OpenClaw / SimpleClaw
+
+The `@openclaw/browsy` plugin integrates browsy as a first-class tool in [OpenClaw](https://openclaw.dev) and compatible frameworks like [SimpleClaw](https://simpleclaw.dev). Unlike the Python integrations above, this is a TypeScript/Node.js plugin that manages its own browsy server process.
+
+```bash
+npm install @openclaw/browsy
+```
+
+```typescript
+import { register } from "@openclaw/browsy";
+export default { register };
+```
+
+The plugin auto-starts a `browsy serve` process and injects 14 browsing tools into every agent. It can also intercept built-in Playwright browser tools for a transparent speed upgrade.
+
+See the full [OpenClaw / SimpleClaw integration guide](./openclaw.md) for configuration, standalone usage, and custom orchestrator support.
+
 ## Shared Browser instance
 
 All integrations lazily initialize a `Browser` instance with default settings (1920x1080 viewport) if none is provided. The `Browser` instance is shared across all tool calls within the same integration, maintaining session state (cookies, history, form values) across interactions.

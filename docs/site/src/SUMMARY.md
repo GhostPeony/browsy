@@ -20,6 +20,7 @@
 - [REST API](./rest-api.md)
 - [A2A Protocol](./a2a.md)
 - [Framework Integrations](./framework-integrations.md)
+- [OpenClaw / SimpleClaw](./openclaw.md)
 - [Python Bindings](./python.md)
 - [CLI Usage](./cli.md)
 - [Web Search](./web-search.md)
