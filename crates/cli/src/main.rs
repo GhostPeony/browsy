@@ -51,6 +51,7 @@ enum Commands {
         viewport: String,
     },
     /// Start the REST API + A2A server
+    #[cfg(feature = "serve")]
     Serve {
         /// Port to listen on (default: 3847)
         #[arg(long, default_value = "3847")]
@@ -122,6 +123,7 @@ fn main() {
             let dom = browsy_core::parse(&html, vw, vh);
             print_dom(&dom, json);
         }
+        #[cfg(feature = "serve")]
         Commands::Serve { port, allow_private_network } => {
             let config = browsy_server::ServerConfig {
                 port,

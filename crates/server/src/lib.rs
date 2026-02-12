@@ -14,6 +14,7 @@ use axum::{
 use browsy_core::fetch::{FetchError, SearchEngine, Session, SessionConfig};
 use browsy_core::output;
 use serde::{Deserialize, Serialize};
+use tower_http::cors::{self, CorsLayer};
 use uuid::Uuid;
 
 mod a2a;
@@ -38,6 +39,7 @@ pub struct AppState {
 pub struct ServerConfig {
     pub port: u16,
     pub session_timeout: Duration,
+    pub max_sessions: usize,
     pub allow_private_network: bool,
 }
 
@@ -46,6 +48,7 @@ impl Default for ServerConfig {
         Self {
             port: 3847,
             session_timeout: Duration::from_secs(30 * 60),
+            max_sessions: 100,
             allow_private_network: false,
         }
     }
@@ -78,6 +81,11 @@ impl AppState {
                 sessions.get_mut(t).unwrap().last_access = Instant::now();
                 return Ok(t.clone());
             }
+        }
+
+        // Enforce session limit
+        if sessions.len() >= self.config.max_sessions {
+            return Err(StatusCode::SERVICE_UNAVAILABLE);
         }
 
         // Create new session
@@ -295,6 +303,12 @@ where
 
 /// Build the axum router.
 pub fn build_router(state: Arc<AppState>) -> Router {
+    let cors = CorsLayer::new()
+        .allow_origin(cors::Any)
+        .allow_methods(cors::Any)
+        .allow_headers(cors::Any)
+        .expose_headers([axum::http::HeaderName::from_static("x-browsy-session")]);
+
     Router::new()
         .route("/health", get(health))
         .route("/api/browse", post(browse))
@@ -312,6 +326,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/tables", get(tables))
         .route("/api/back", post(back))
         .merge(a2a::a2a_routes())
+        .layer(cors)
         .with_state(state)
 }
 
