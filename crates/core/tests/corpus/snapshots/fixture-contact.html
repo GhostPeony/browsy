@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Contact Us - ExampleCorp</title>
+</head>
+<body>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/about">About</a>
+    <a href="/contact">Contact</a>
+  </nav>
+  <main>
+    <h1>Get in Touch</h1>
+    <p>We'd love to hear from you. Fill out the form below and we'll get back to you within 24 hours.</p>
+    <form action="/contact" method="post">
+      <label for="name">Your Name</label>
+      <input type="text" id="name" name="name" placeholder="Jane Smith" required>
+
+      <label for="email">Email Address</label>
+      <input type="email" id="email" name="email" placeholder="jane@example.com" required>
+
+      <label for="subject">Subject</label>
+      <input type="text" id="subject" name="subject" placeholder="How can we help?">
+
+      <label for="message">Message</label>
+      <textarea id="message" name="message" rows="6" placeholder="Tell us what's on your mind..." required></textarea>
+
+      <button type="submit">Send Message</button>
+    </form>
+  </main>
+</body>
+</html>

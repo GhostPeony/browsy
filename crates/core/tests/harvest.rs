@@ -52,6 +52,13 @@ mod inner {
             browsy_core::output::SuggestedAction::Search { .. } => "Search",
             browsy_core::output::SuggestedAction::Consent { .. } => "Consent",
             browsy_core::output::SuggestedAction::SelectFromList { .. } => "SelectFromList",
+            browsy_core::output::SuggestedAction::CookieConsent { .. } => "CookieConsent",
+            browsy_core::output::SuggestedAction::Paginate { .. } => "Paginate",
+            browsy_core::output::SuggestedAction::Register { .. } => "Register",
+            browsy_core::output::SuggestedAction::Contact { .. } => "Contact",
+            browsy_core::output::SuggestedAction::FillForm { .. } => "FillForm",
+            browsy_core::output::SuggestedAction::Download { .. } => "Download",
+            browsy_core::output::SuggestedAction::CaptchaChallenge { .. } => "CaptchaChallenge",
         }).collect();
         let codes = dom.find_codes();
 

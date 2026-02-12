@@ -766,6 +766,79 @@ fn test_compact_output_form_markers() {
     assert!(compact.contains("[v]"), "compact should contain [v], got: {}", compact);
 }
 
+// --- Semantic position tests ---
+
+#[test]
+fn test_compact_output_semantic_position() {
+    // Test 1: Duplicate "Read more" links get region labels
+    let html = r#"
+    <html>
+    <body style="margin: 0;">
+        <div style="width: 1920px;">
+            <div style="height: 200px;">
+                <a href="/post/1">Read more</a>
+            </div>
+            <div style="height: 200px; margin-top: 200px;">
+                <a href="/post/2">Read more</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    "#;
+
+    let dom = browsy_core::parse(html, 1920.0, 1080.0);
+    let compact = output::to_compact_string(&dom);
+
+    // Both "Read more" links share (tag=a, text="Read more") so they need disambiguation
+    let read_more_lines: Vec<&str> = compact.lines()
+        .filter(|l| l.contains("\"Read more\""))
+        .collect();
+    assert_eq!(read_more_lines.len(), 2, "Should have 2 'Read more' lines, got: {}", compact);
+    assert!(read_more_lines.iter().all(|l| l.contains("@")),
+        "All duplicate elements should have region labels, got:\n{}", compact);
+
+    // Test 2: Unique elements have NO position data
+    let html2 = r#"
+    <html><body>
+        <a href="/about">About Us</a>
+        <a href="/contact">Contact</a>
+        <button>Sign In</button>
+    </body></html>
+    "#;
+
+    let dom2 = browsy_core::parse(html2, 1920.0, 1080.0);
+    let compact2 = output::to_compact_string(&dom2);
+
+    // No element shares (tag, text, href) so no @ labels
+    assert!(!compact2.contains("@"),
+        "Unique elements should have no position data, got:\n{}", compact2);
+
+    // Test 3: Wide input gets size hint
+    let html3 = r#"
+    <html>
+    <body style="margin: 0;">
+        <input type="text" placeholder="Search" style="width: 1200px;" />
+        <input type="text" placeholder="ZIP" style="width: 100px;" />
+        <input type="text" placeholder="Name" style="width: 500px;" />
+    </body>
+    </html>
+    "#;
+
+    let dom3 = browsy_core::parse(html3, 1920.0, 1080.0);
+    let compact3 = output::to_compact_string(&dom3);
+
+    // 1200/1920 = 62.5% → wide
+    assert!(compact3.contains("wide"),
+        "1200px input on 1920px viewport should be 'wide', got:\n{}", compact3);
+    // 100/1920 = 5.2% → narrow
+    assert!(compact3.contains("narrow"),
+        "100px input on 1920px viewport should be 'narrow', got:\n{}", compact3);
+    // 500/1920 = 26% → no size hint (normal range)
+    let name_line = compact3.lines().find(|l| l.contains("\"Name\"")).unwrap();
+    assert!(!name_line.contains("wide") && !name_line.contains("narrow") && !name_line.contains("full"),
+        "500px input should have no size hint, got: {}", name_line);
+}
+
 // --- Suggested action tests ---
 
 #[test]

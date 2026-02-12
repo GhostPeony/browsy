@@ -87,6 +87,13 @@ fn action_type_name(action: &SuggestedAction) -> &str {
         SuggestedAction::Search { .. } => "Search",
         SuggestedAction::Consent { .. } => "Consent",
         SuggestedAction::SelectFromList { .. } => "SelectFromList",
+        SuggestedAction::CookieConsent { .. } => "CookieConsent",
+        SuggestedAction::Paginate { .. } => "Paginate",
+        SuggestedAction::Register { .. } => "Register",
+        SuggestedAction::Contact { .. } => "Contact",
+        SuggestedAction::FillForm { .. } => "FillForm",
+        SuggestedAction::Download { .. } => "Download",
+        SuggestedAction::CaptchaChallenge { .. } => "CaptchaChallenge",
     }
 }
 
@@ -108,6 +115,44 @@ fn action_ids(action: &SuggestedAction) -> Vec<u32> {
         }
         SuggestedAction::SelectFromList { items } => {
             items.clone()
+        }
+        SuggestedAction::CookieConsent { accept_id, reject_id } => {
+            let mut ids = vec![*accept_id];
+            if let Some(id) = reject_id { ids.push(*id); }
+            ids
+        }
+        SuggestedAction::Paginate { next_id, prev_id } => {
+            let mut ids = Vec::new();
+            if let Some(id) = next_id { ids.push(*id); }
+            if let Some(id) = prev_id { ids.push(*id); }
+            ids
+        }
+        SuggestedAction::Register { email_id, username_id, password_id, confirm_password_id, name_id, submit_id } => {
+            let mut ids = vec![*password_id, *submit_id];
+            if let Some(id) = email_id { ids.push(*id); }
+            if let Some(id) = username_id { ids.push(*id); }
+            if let Some(id) = confirm_password_id { ids.push(*id); }
+            if let Some(id) = name_id { ids.push(*id); }
+            ids
+        }
+        SuggestedAction::Contact { name_id, email_id, message_id, submit_id } => {
+            let mut ids = vec![*message_id, *submit_id];
+            if let Some(id) = name_id { ids.push(*id); }
+            if let Some(id) = email_id { ids.push(*id); }
+            ids
+        }
+        SuggestedAction::FillForm { fields, submit_id } => {
+            let mut ids: Vec<u32> = fields.iter().map(|f| f.id).collect();
+            ids.push(*submit_id);
+            ids
+        }
+        SuggestedAction::Download { items } => {
+            items.iter().map(|i| i.id).collect()
+        }
+        SuggestedAction::CaptchaChallenge { submit_id, .. } => {
+            let mut ids = Vec::new();
+            if let Some(id) = submit_id { ids.push(*id); }
+            ids
         }
     }
 }
@@ -180,6 +225,13 @@ fn abbrev_actions(actions: &[String]) -> String {
         "Search" => "S",
         "Consent" => "C",
         "SelectFromList" => "SFL",
+        "CookieConsent" => "CC",
+        "Paginate" => "PG",
+        "Register" => "R",
+        "Contact" => "CT",
+        "FillForm" => "FF",
+        "Download" => "DL",
+        "CaptchaChallenge" => "CAP",
         other => other,
     }).collect::<Vec<_>>().join(",")
 }

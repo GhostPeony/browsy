@@ -141,7 +141,18 @@ impl BrowsyServer {
     ) -> Result<CallToolResult, McpError> {
         let mut session = self.session.lock().unwrap();
         let dom = session.goto(&params.url).map_err(map_fetch_error)?;
-        let text = format_page(&dom, params.format.as_deref());
+        let mut text = String::new();
+
+        // Surface CAPTCHA warning at top of output when detected
+        if dom.page_type == output::PageType::Captcha {
+            text.push_str("⚠ CAPTCHA detected");
+            if let Some(ref captcha) = dom.captcha {
+                text.push_str(&format!(" ({:?})", captcha.captcha_type));
+            }
+            text.push_str(" — this page requires human verification to proceed.\n");
+        }
+
+        text.push_str(&format_page(&dom, params.format.as_deref()));
         Ok(CallToolResult::success(vec![Content::text(text)]))
     }
 
@@ -152,7 +163,17 @@ impl BrowsyServer {
     ) -> Result<CallToolResult, McpError> {
         let mut session = self.session.lock().unwrap();
         let dom = session.click(params.id).map_err(map_fetch_error)?;
-        let text = format_page(&dom, None);
+        let mut text = String::new();
+
+        if dom.page_type == output::PageType::Captcha {
+            text.push_str("⚠ CAPTCHA detected");
+            if let Some(ref captcha) = dom.captcha {
+                text.push_str(&format!(" ({:?})", captcha.captcha_type));
+            }
+            text.push_str(" — this page requires human verification to proceed.\n");
+        }
+
+        text.push_str(&format_page(&dom, None));
         Ok(CallToolResult::success(vec![Content::text(text)]))
     }
 
@@ -302,7 +323,7 @@ impl BrowsyServer {
     pub async fn page_info(&self) -> Result<CallToolResult, McpError> {
         let session = self.session.lock().unwrap();
         let dom = session.dom().ok_or_else(|| err("No page loaded"))?;
-        let info = serde_json::json!({
+        let mut info = serde_json::json!({
             "title": dom.title,
             "url": dom.url,
             "page_type": format!("{:?}", dom.page_type),
@@ -316,6 +337,12 @@ impl BrowsyServer {
             }).collect::<Vec<_>>(),
             "pagination": dom.pagination(),
         });
+        if let Some(ref captcha) = dom.captcha {
+            info.as_object_mut().unwrap().insert(
+                "captcha".to_string(),
+                serde_json::to_value(captcha).unwrap_or_default(),
+            );
+        }
         let text = serde_json::to_string_pretty(&info).unwrap_or_default();
         Ok(CallToolResult::success(vec![Content::text(text)]))
     }
@@ -327,7 +354,9 @@ impl ServerHandler for BrowsyServer {
         ServerInfo {
             instructions: Some(
                 "browsy: zero-render browser for AI agents. Use browse to navigate, \
-                 then interact with elements by ID. Elements are listed with [id:tag \"text\"] format."
+                 then interact with elements by ID. Elements are listed with [id:tag \"text\"] format. \
+                 Size hints (narrow/wide/full) appear on form elements. \
+                 Position (@top, @mid-L, etc.) appears only to disambiguate duplicate elements."
                     .to_string(),
             ),
             capabilities: ServerCapabilities::builder().enable_tools().build(),

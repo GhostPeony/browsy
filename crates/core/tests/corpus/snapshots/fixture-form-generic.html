@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Submit a Report - SafetyPortal</title>
+</head>
+<body>
+  <nav>
+    <a href="/">SafetyPortal</a>
+    <a href="/reports">Reports</a>
+  </nav>
+  <main>
+    <h1>Submit a Safety Report</h1>
+    <p>Please fill out the form below to submit a safety incident report.</p>
+    <form action="/reports/submit" method="post">
+      <label for="date">Date of Incident</label>
+      <input type="date" id="date" name="incident_date" required>
+
+      <label for="location">Location</label>
+      <input type="text" id="location" name="location" placeholder="Building A, Floor 3" required>
+
+      <label for="category">Category</label>
+      <select id="category" name="category">
+        <option value="">Select a category...</option>
+        <option value="slip">Slip/Trip/Fall</option>
+        <option value="equipment">Equipment Failure</option>
+        <option value="chemical">Chemical Exposure</option>
+        <option value="other">Other</option>
+      </select>
+
+      <label for="severity">Severity</label>
+      <select id="severity" name="severity">
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+        <option value="critical">Critical</option>
+      </select>
+
+      <label for="description">Description</label>
+      <textarea id="description" name="description" rows="5" placeholder="Describe the incident..." required></textarea>
+
+      <button type="submit">Submit Report</button>
+    </form>
+  </main>
+</body>
+</html>

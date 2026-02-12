@@ -77,9 +77,9 @@
       "file": "fixture-captcha.html",
       "url": "fixture://captcha",
       "page_type": "Captcha",
-      "action_types": [],
+      "action_types": ["CaptchaChallenge"],
       "codes": [],
-      "notes": "Hand-crafted CAPTCHA challenge fixture"
+      "notes": "Hand-crafted image grid CAPTCHA challenge — detected via ImageGrid pattern (9 image buttons)"
     },
     {
       "file": "github-login.html",
@@ -226,6 +226,120 @@
       "action_types": [],
       "codes": [],
       "notes": "GitHub org page — could be Article, List, or Other"
+    },
+    {
+      "file": "fixture-cookie-banner.html",
+      "url": "fixture://cookie-banner",
+      "page_type": "List",
+      "action_types": ["SelectFromList", "CookieConsent"],
+      "codes": [],
+      "notes": "Hand-crafted page with GDPR cookie consent banner"
+    },
+    {
+      "file": "ddg-homepage.html",
+      "url": "https://duckduckgo.com",
+      "page_type": "Search",
+      "action_types": ["Search"],
+      "codes": [],
+      "notes": "DuckDuckGo homepage — search input is hidden (JS-rendered) but detectable"
+    },
+    {
+      "file": "bbc-news.html",
+      "url": "https://www.bbc.com/news",
+      "page_type": "List",
+      "action_types": ["SelectFromList"],
+      "codes": [],
+      "notes": "News homepage — many headings and links, not a single article"
+    },
+    {
+      "file": "python-org.html",
+      "url": "https://www.python.org",
+      "page_type": "List",
+      "action_types": ["Search", "SelectFromList"],
+      "codes": [],
+      "notes": "Python.org homepage — has search bar but primarily a link list"
+    },
+    {
+      "file": "ddg-results.html",
+      "url": "https://duckduckgo.com/?q=rust+programming",
+      "page_type": "SearchResults",
+      "action_types": [],
+      "codes": [],
+      "skip": true,
+      "skip_reason": "JS SPA — results are rendered client-side, only 4 elements in HTML",
+      "notes": "DuckDuckGo search results page"
+    },
+    {
+      "file": "fixture-search-results-url.html",
+      "url": "https://websearch.example.com/search?q=rust+web+framework",
+      "page_type": "SearchResults",
+      "action_types": ["Search", "SelectFromList", "Paginate"],
+      "codes": [],
+      "notes": "Hand-crafted search results — URL-based detection (title lacks 'results' keyword)"
+    },
+    {
+      "file": "fixture-register.html",
+      "url": "fixture://register",
+      "page_type": "Login",
+      "action_types": ["Register"],
+      "codes": [],
+      "notes": "Hand-crafted registration form with email, username, password, confirm password"
+    },
+    {
+      "file": "fixture-contact.html",
+      "url": "fixture://contact",
+      "page_type": "Form",
+      "action_types": ["Contact"],
+      "codes": [],
+      "notes": "Hand-crafted contact form with name, email, subject, message textarea"
+    },
+    {
+      "file": "fixture-form-generic.html",
+      "url": "fixture://form-generic",
+      "page_type": "Form",
+      "action_types": ["FillForm"],
+      "codes": [],
+      "notes": "Hand-crafted generic form (safety report) — triggers FillForm action with labeled fields"
+    },
+    {
+      "file": "fixture-download.html",
+      "url": "fixture://download",
+      "page_type": "Other",
+      "action_types": ["Download"],
+      "codes": [],
+      "notes": "Hand-crafted download page with platform-specific binary links"
+    },
+    {
+      "file": "fixture-recaptcha.html",
+      "url": "fixture://recaptcha",
+      "page_type": "Captcha",
+      "action_types": ["Login", "CaptchaChallenge"],
+      "codes": [],
+      "notes": "Login form with reCAPTCHA — detected via g-recaptcha class and script src"
+    },
+    {
+      "file": "fixture-hcaptcha.html",
+      "url": "fixture://hcaptcha",
+      "page_type": "Captcha",
+      "action_types": ["Register", "CaptchaChallenge"],
+      "codes": [],
+      "notes": "Registration form with hCaptcha — detected via h-captcha class and script src"
+    },
+    {
+      "file": "fixture-cloudflare.html",
+      "url": "fixture://cloudflare",
+      "page_type": "Captcha",
+      "action_types": ["CaptchaChallenge"],
+      "codes": [],
+      "notes": "Cloudflare JS challenge page — detected via title 'Just a moment...' and challenge-running div"
+    },
+    {
+      "file": "fixture-turnstile.html",
+      "url": "fixture://turnstile",
+      "page_type": "Captcha",
+      "action_types": ["CaptchaChallenge"],
+      "codes": [],
+      "notes": "Cloudflare Turnstile verification — detected via cf-turnstile class and script src"
     }
   ]
 }

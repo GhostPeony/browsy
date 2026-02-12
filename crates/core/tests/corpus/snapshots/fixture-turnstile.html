@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Verify - ProtectedSite</title>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+<body>
+  <main>
+    <h1>Human Verification</h1>
+    <p>Please complete the verification to access the site.</p>
+    <form action="/verify" method="post">
+      <div class="cf-turnstile" data-sitekey="0x4AAAAAAADnPIDROrmt1Wwj"></div>
+      <button type="submit">Continue</button>
+    </form>
+  </main>
+</body>
+</html>

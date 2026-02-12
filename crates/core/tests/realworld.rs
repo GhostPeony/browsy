@@ -87,6 +87,30 @@ fn fetch_and_report(url: &str) -> SpatialDom {
                 SuggestedAction::SelectFromList { items } => {
                     println!("  SelectFromList: {} items", items.len());
                 }
+                SuggestedAction::CookieConsent { accept_id, reject_id } => {
+                    println!("  CookieConsent: accept={}, reject={:?}", accept_id, reject_id);
+                }
+                SuggestedAction::Paginate { next_id, prev_id } => {
+                    println!("  Paginate: next={:?}, prev={:?}", next_id, prev_id);
+                }
+                SuggestedAction::Register { email_id, username_id, password_id, confirm_password_id, name_id, submit_id } => {
+                    println!("  Register: email={:?}, username={:?}, password={}, confirm={:?}, name={:?}, submit={}",
+                        email_id, username_id, password_id, confirm_password_id, name_id, submit_id);
+                }
+                SuggestedAction::Contact { name_id, email_id, message_id, submit_id } => {
+                    println!("  Contact: name={:?}, email={:?}, message={}, submit={}",
+                        name_id, email_id, message_id, submit_id);
+                }
+                SuggestedAction::FillForm { fields, submit_id } => {
+                    println!("  FillForm: {} fields, submit={}", fields.len(), submit_id);
+                }
+                SuggestedAction::Download { items } => {
+                    println!("  Download: {} items", items.len());
+                }
+                SuggestedAction::CaptchaChallenge { captcha_type, sitekey, submit_id } => {
+                    println!("  CaptchaChallenge: type={:?}, sitekey={:?}, submit={:?}",
+                        captcha_type, sitekey, submit_id);
+                }
             }
         }
     }
@@ -359,6 +383,44 @@ fn test_realworld_action_ids_valid() {
             }
             SuggestedAction::SelectFromList { items } => {
                 items.clone()
+            }
+            SuggestedAction::CookieConsent { accept_id, reject_id } => {
+                let mut v = vec![*accept_id];
+                if let Some(id) = reject_id { v.push(*id); }
+                v
+            }
+            SuggestedAction::Paginate { next_id, prev_id } => {
+                let mut v = Vec::new();
+                if let Some(id) = next_id { v.push(*id); }
+                if let Some(id) = prev_id { v.push(*id); }
+                v
+            }
+            SuggestedAction::Register { email_id, username_id, password_id, confirm_password_id, name_id, submit_id } => {
+                let mut v = vec![*password_id, *submit_id];
+                if let Some(id) = email_id { v.push(*id); }
+                if let Some(id) = username_id { v.push(*id); }
+                if let Some(id) = confirm_password_id { v.push(*id); }
+                if let Some(id) = name_id { v.push(*id); }
+                v
+            }
+            SuggestedAction::Contact { name_id, email_id, message_id, submit_id } => {
+                let mut v = vec![*message_id, *submit_id];
+                if let Some(id) = name_id { v.push(*id); }
+                if let Some(id) = email_id { v.push(*id); }
+                v
+            }
+            SuggestedAction::FillForm { fields, submit_id } => {
+                let mut v: Vec<u32> = fields.iter().map(|f| f.id).collect();
+                v.push(*submit_id);
+                v
+            }
+            SuggestedAction::Download { items } => {
+                items.iter().map(|i| i.id).collect()
+            }
+            SuggestedAction::CaptchaChallenge { submit_id, .. } => {
+                let mut v = Vec::new();
+                if let Some(id) = submit_id { v.push(*id); }
+                v
             }
         };
 

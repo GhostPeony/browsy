@@ -9,7 +9,7 @@ use super::{
     is_url_allowed,
     read_response_text_limited,
 };
-use crate::output::{SpatialDom, SpatialElement, SuggestedAction};
+use crate::output::{CaptchaInfo, PageType, SpatialDom, SpatialElement, SuggestedAction};
 use reqwest::blocking::Client;
 use reqwest::redirect::Policy;
 use serde::{Serialize, Deserialize};
@@ -584,6 +584,18 @@ impl Session {
     /// Extract a verification code from the current page.
     pub fn find_verification_code(&self) -> Option<String> {
         self.dom_ref()?.find_codes().into_iter().next()
+    }
+
+    /// Returns true if the current page is a CAPTCHA challenge.
+    pub fn is_captcha(&self) -> bool {
+        self.current_dom.as_ref()
+            .map(|dom| dom.page_type == PageType::Captcha)
+            .unwrap_or(false)
+    }
+
+    /// Returns CAPTCHA info if a CAPTCHA was detected on the current page.
+    pub fn captcha_info(&self) -> Option<&CaptchaInfo> {
+        self.current_dom.as_ref()?.captcha.as_ref()
     }
 
     /// Search the web using DuckDuckGo and return structured results.

@@ -15,10 +15,41 @@ pub struct SpatialDom {
     pub suggested_actions: Vec<SuggestedAction>,
     #[serde(default, skip_serializing_if = "PageType::is_other")]
     pub page_type: PageType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub captcha: Option<CaptchaInfo>,
     pub els: Vec<SpatialElement>,
     /// O(1) lookup: element ID → index in `els`.
     #[serde(skip)]
     id_index: HashMap<u32, usize>,
+}
+
+/// CAPTCHA information detected on the page.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaptchaInfo {
+    /// The type of CAPTCHA detected.
+    pub captcha_type: CaptchaType,
+    /// Site key for the CAPTCHA service (from data-sitekey attribute).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sitekey: Option<String>,
+}
+
+/// Known CAPTCHA types.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CaptchaType {
+    /// Google reCAPTCHA v2 or v3
+    ReCaptcha,
+    /// hCaptcha
+    HCaptcha,
+    /// Cloudflare Turnstile
+    Turnstile,
+    /// Cloudflare JS challenge ("Just a moment...")
+    CloudflareChallenge,
+    /// Custom image-grid CAPTCHA (select images matching a prompt)
+    ImageGrid,
+    /// Text-based CAPTCHA (type characters from an image)
+    TextCaptcha,
+    /// CAPTCHA detected but type is unknown
+    Unknown,
 }
 
 /// A single element in the Spatial DOM.
@@ -99,6 +130,73 @@ pub enum SuggestedAction {
     SelectFromList {
         items: Vec<u32>,
     },
+    CookieConsent {
+        accept_id: u32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reject_id: Option<u32>,
+    },
+    Paginate {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        next_id: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        prev_id: Option<u32>,
+    },
+    Register {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        email_id: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        username_id: Option<u32>,
+        password_id: u32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        confirm_password_id: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        name_id: Option<u32>,
+        submit_id: u32,
+    },
+    Contact {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        name_id: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        email_id: Option<u32>,
+        message_id: u32,
+        submit_id: u32,
+    },
+    FillForm {
+        fields: Vec<FormField>,
+        submit_id: u32,
+    },
+    CaptchaChallenge {
+        captcha_type: CaptchaType,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sitekey: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        submit_id: Option<u32>,
+    },
+    Download {
+        items: Vec<DownloadItem>,
+    },
+}
+
+/// A downloadable item detected on the page.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadItem {
+    pub id: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub href: Option<String>,
+}
+
+/// A labeled form field for the FillForm action recipe.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FormField {
+    pub id: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub input_type: Option<String>,
 }
 
 impl SpatialDom {
@@ -148,6 +246,7 @@ impl SpatialDom {
             scroll: self.scroll,
             suggested_actions: self.suggested_actions.clone(),
             page_type: self.page_type.clone(),
+            captcha: self.captcha.clone(),
             els,
             id_index,
         }
@@ -188,6 +287,10 @@ pub fn generate_spatial_dom(
     // Extract title from the tree
     let title = find_title(root).unwrap_or_default();
 
+    // Scan the layout tree for CAPTCHA signals before building the SpatialDom.
+    // This must happen before detect_page_type since CAPTCHA detection uses these signals.
+    let captcha = detect_captcha_from_tree(root);
+
     let id_index = els.iter().enumerate().map(|(i, e)| (e.id, i)).collect();
     let mut dom = SpatialDom {
         url: String::new(), // Set by caller
@@ -196,6 +299,7 @@ pub fn generate_spatial_dom(
         scroll: [0.0, 0.0],
         suggested_actions: Vec::new(),
         page_type: PageType::Other,
+        captcha,
         els,
         id_index,
     };
@@ -686,8 +790,39 @@ fn find_title(node: &LayoutNode) -> Option<String> {
     None
 }
 
+/// Classify element width as a semantic size hint for form elements.
+fn classify_size(width: i32, vp_width: f32) -> Option<&'static str> {
+    let pct = width as f32 / vp_width * 100.0;
+    if pct > 90.0 { Some("full") }
+    else if pct > 50.0 { Some("wide") }
+    else if pct < 15.0 && width > 0 { Some("narrow") }
+    else { None }
+}
+
+/// Classify element position into a 3×3 grid region (or "below" if below fold).
+fn classify_region(b: &[i32; 4], vp: &[f32; 2]) -> &'static str {
+    let cy = b[1] as f32 + b[3] as f32 / 2.0;
+    if cy > vp[1] { return "below"; }
+    let cx = b[0] as f32 + b[2] as f32 / 2.0;
+    let col = if cx < vp[0] / 3.0 { 0 } else if cx < vp[0] * 2.0 / 3.0 { 1 } else { 2 };
+    let row = if cy < vp[1] / 3.0 { 0 } else if cy < vp[1] * 2.0 / 3.0 { 1 } else { 2 };
+    const NAMES: [[&str; 3]; 3] = [
+        ["top-L", "top", "top-R"],
+        ["mid-L", "mid", "mid-R"],
+        ["bot-L", "bot", "bot-R"],
+    ];
+    NAMES[row][col]
+}
+
 /// Generate the compact string format for extreme token budgets.
 pub fn to_compact_string(dom: &SpatialDom) -> String {
+    // Pre-pass: count (tag, text) tuples to detect duplicates needing disambiguation
+    let mut tuple_counts: HashMap<(String, Option<String>), usize> = HashMap::new();
+    for el in &dom.els {
+        let key = (el.tag.clone(), el.text.clone());
+        *tuple_counts.entry(key).or_insert(0) += 1;
+    }
+
     let mut lines = Vec::new();
     for el in &dom.els {
         let mut parts = Vec::new();
@@ -726,7 +861,18 @@ pub fn to_compact_string(dom: &SpatialDom) -> String {
             parts.push(format!("->{}", href));
         }
 
-        parts.push(format!("@{},{} {}x{}", el.b[0], el.b[1], el.b[2], el.b[3]));
+        // Size hint for form elements
+        if matches!(el.tag.as_str(), "input" | "button" | "textarea" | "select") {
+            if let Some(size) = classify_size(el.b[2], dom.vp[0]) {
+                parts.push(size.to_string());
+            }
+        }
+
+        // Region label only when duplicate (tag, text) tuples exist
+        let key = (el.tag.clone(), el.text.clone());
+        if tuple_counts.get(&key).copied().unwrap_or(0) > 1 {
+            parts.push(format!("@{}", classify_region(&el.b, &dom.vp)));
+        }
 
         lines.push(format!("[{}]", parts.join(" ")));
     }
@@ -742,6 +888,13 @@ pub struct DeltaDom {
     /// IDs of elements that were removed.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub removed: Vec<u32>,
+    /// Viewport dimensions for size hint computation.
+    #[serde(default = "default_vp")]
+    pub vp: [f32; 2],
+}
+
+fn default_vp() -> [f32; 2] {
+    [1920.0, 1080.0]
 }
 
 /// Compute the diff between two SpatialDoms.
@@ -771,7 +924,7 @@ pub fn diff(old: &SpatialDom, new: &SpatialDom) -> DeltaDom {
         }
     }
 
-    DeltaDom { changed, removed }
+    DeltaDom { changed, removed, vp: new.vp }
 }
 
 /// Generate compact string format for a delta.
@@ -802,7 +955,13 @@ pub fn delta_to_compact_string(delta: &DeltaDom) -> String {
             parts.push(format!("->{}", href));
         }
 
-        parts.push(format!("@{},{} {}x{}", el.b[0], el.b[1], el.b[2], el.b[3]));
+        // Size hint for form elements (no disambiguation in deltas — changed elements have unique +id:tag)
+        if matches!(el.tag.as_str(), "input" | "button" | "textarea" | "select") {
+            if let Some(size) = classify_size(el.b[2], delta.vp[0]) {
+                parts.push(size.to_string());
+            }
+        }
+
         lines.push(format!("[{}]", parts.join(" ")));
     }
 
@@ -1163,6 +1322,8 @@ fn detect_page_type(dom: &SpatialDom) -> PageType {
         })
     };
 
+    let visible_count = dom.els.iter().filter(|e| e.hidden != Some(true)).count();
+
     // Error
     let has_error_alerts = dom.els.iter().any(|e| {
         e.alert_type.as_deref() == Some("error")
@@ -1172,8 +1333,22 @@ fn detect_page_type(dom: &SpatialDom) -> PageType {
         return PageType::Error;
     }
 
-    // Captcha
-    if title_has(&["captcha", "verify you're human", "verify you are human", "robot"]) {
+    // Captcha — multiple detection signals:
+    // 1. Title/heading keywords
+    // 2. CAPTCHA service detected in HTML structure (reCAPTCHA, hCaptcha, Turnstile, etc.)
+    // 3. Cloudflare challenge page ("Just a moment...")
+    let captcha_title_keywords = &[
+        "captcha", "verify you're human", "verify you are human", "robot",
+        "security check", "challenge", "just a moment",
+        "attention required", "are you human",
+    ];
+    let has_captcha_title = title_has(captcha_title_keywords);
+    let has_captcha_heading = heading_has(&[
+        "captcha", "verify you're human", "security check", "are you human",
+        "complete the challenge", "human verification",
+    ]);
+    let has_captcha_service = dom.captcha.is_some();
+    if has_captcha_title || has_captcha_heading || has_captcha_service {
         return PageType::Captcha;
     }
 
@@ -1240,25 +1415,44 @@ fn detect_page_type(dom: &SpatialDom) -> PageType {
     // When a page has many links (typical of list pages), require more long text to
     // classify as Article. This prevents content-heavy list pages (e.g. subreddits with
     // long post descriptions) from being misclassified.
+    //
+    // Key distinction: articles have lots of body text between headings (high paragraph-to-heading
+    // ratio). List pages (news homepages) have many headings with short descriptions (low ratio).
+    // Wikipedia: 56 headings, 102 long paragraphs (ratio ~1.8). BBC News: 61 headings, ~25 long
+    // paragraphs (ratio ~0.4).
     let headings = dom.els.iter().filter(|e| e.role.as_deref() == Some("heading")).count();
     let long_texts = dom.els.iter().filter(|e| {
         e.tag == "p" && e.text.as_ref().map(|t| t.len() > 100).unwrap_or(false)
     }).count();
     let long_text_threshold = if link_count >= 20 { 10 } else { 2 };
-    if headings >= 3 && long_texts >= long_text_threshold {
+    // When there are many headings (15+), require substantial body text per heading to
+    // distinguish real articles (Wikipedia) from heading-heavy list pages (BBC News).
+    let is_heading_heavy_list = headings >= 15 && link_count >= 10
+        && (long_texts as f64) < (headings as f64) * 0.8;
+    if headings >= 3 && long_texts >= long_text_threshold && !is_heading_heavy_list {
         return PageType::Article;
     }
 
-    // SearchResults — needs both a search input AND search-related title/heading context.
-    // This must come before List, since search result pages have many links.
+    // SearchResults — must come before List, since search result pages have many links.
+    // Multiple signals: title/heading keywords, URL query params, search input presence.
     let has_search_input = dom.els.iter().any(|e| {
         e.hidden != Some(true) && is_search_input(e)
     });
+    let has_any_search_input = has_search_input || dom.els.iter().any(|e| is_search_input(e));
     let search_results_keywords = &["search results", "results for", "search:", "found"];
     let has_search_results_context = title_has(search_results_keywords)
         || heading_has(search_results_keywords)
         || title_has(&["search"]);
-    if has_search_input && has_search_results_context && link_count >= 8 {
+    // URL-based signal: ?q=, ?query=, ?s=, ?search=, or /search path
+    let url_lower = dom.url.to_lowercase();
+    let has_search_url = url_lower.contains("?q=") || url_lower.contains("&q=")
+        || url_lower.contains("?query=") || url_lower.contains("&query=")
+        || url_lower.contains("?s=") || url_lower.contains("&s=")
+        || url_lower.contains("?search=") || url_lower.contains("&search=")
+        || url_lower.contains("/search?") || url_lower.contains("/search/");
+    if has_any_search_input && link_count >= 8
+        && (has_search_results_context || has_search_url)
+    {
         return PageType::SearchResults;
     }
 
@@ -1272,9 +1466,9 @@ fn detect_page_type(dom: &SpatialDom) -> PageType {
         return PageType::Search;
     }
 
-    // Form — count data-entry inputs only (exclude checkboxes, radios, hidden, submit, button)
+    // Form — count visible data-entry inputs only (exclude checkboxes, radios, hidden, submit, button)
     let input_count = dom.els.iter().filter(|e| {
-        match e.tag.as_str() {
+        e.hidden != Some(true) && match e.tag.as_str() {
             "textarea" | "select" => true,
             "input" => !matches!(
                 e.input_type.as_deref(),
@@ -1287,6 +1481,17 @@ fn detect_page_type(dom: &SpatialDom) -> PageType {
         return PageType::Form;
     }
 
+    // Search (hidden fallback) — JS-rendered search engines (e.g. DuckDuckGo) hide the search
+    // input without JS. Detect these when the page has very few visible elements.
+    if visible_count < 5 {
+        let has_hidden_search = dom.els.iter().any(|e| {
+            e.hidden == Some(true) && is_search_input(e)
+        });
+        if has_hidden_search {
+            return PageType::Search;
+        }
+    }
+
     PageType::Other
 }
 
@@ -1295,8 +1500,12 @@ fn detect_page_type(dom: &SpatialDom) -> PageType {
 fn detect_suggested_actions(dom: &SpatialDom) -> Vec<SuggestedAction> {
     let mut actions = Vec::new();
 
-    // Priority order: Login > EnterCode > Consent > Search > SelectFromList
-    if let Some(a) = detect_login_action(dom) {
+    // Register vs Login: prefer Register when registration context is present.
+    // Both detect password fields, but Register also checks for confirm-password or
+    // registration keywords in title/heading.
+    if let Some(a) = detect_register_action(dom) {
+        actions.push(a);
+    } else if let Some(a) = detect_login_action(dom) {
         actions.push(a);
     }
     if let Some(a) = detect_enter_code_action(dom) {
@@ -1305,10 +1514,28 @@ fn detect_suggested_actions(dom: &SpatialDom) -> Vec<SuggestedAction> {
     if let Some(a) = detect_consent_action(dom) {
         actions.push(a);
     }
+    if let Some(a) = detect_contact_action(dom) {
+        actions.push(a);
+    }
     if let Some(a) = detect_search_action(dom) {
         actions.push(a);
     }
     if let Some(a) = detect_select_from_list_action(dom) {
+        actions.push(a);
+    }
+    if let Some(a) = detect_cookie_consent_action(dom) {
+        actions.push(a);
+    }
+    if let Some(a) = detect_paginate_action(dom) {
+        actions.push(a);
+    }
+    if let Some(a) = detect_fill_form_action(dom, &actions) {
+        actions.push(a);
+    }
+    if let Some(a) = detect_download_action(dom) {
+        actions.push(a);
+    }
+    if let Some(a) = detect_captcha_challenge_action(dom) {
         actions.push(a);
     }
 
@@ -1436,15 +1663,19 @@ fn detect_enter_code_action(dom: &SpatialDom) -> Option<SuggestedAction> {
 }
 
 fn detect_search_action(dom: &SpatialDom) -> Option<SuggestedAction> {
+    // Prefer visible search inputs, but fall back to hidden ones (JS-rendered search engines)
     let search_input = dom.els.iter()
         .filter(|e| e.hidden != Some(true))
-        .find(|e| is_search_input(e))?;
+        .find(|e| is_search_input(e))
+        .or_else(|| dom.els.iter().find(|e| is_search_input(e)))?;
 
-    let submit_id = find_nearest_submit_button(dom, search_input.id)?;
+    // Try visible submit buttons first, then fall back to any (including hidden)
+    let submit_id = find_nearest_submit_button(dom, search_input.id)
+        .or_else(|| find_nearest_button(dom, search_input.id));
 
     Some(SuggestedAction::Search {
         input_id: search_input.id,
-        submit_id,
+        submit_id: submit_id?,
     })
 }
 
@@ -1539,6 +1770,493 @@ fn detect_select_from_list_action(dom: &SpatialDom) -> Option<SuggestedAction> {
 /// Find the nearest visible submit button to an input element.
 /// Prefers buttons below the input; scores by Manhattan distance (Y weighted 2x).
 pub(crate) fn find_nearest_submit_button(dom: &SpatialDom, input_id: u32) -> Option<u32> {
+    find_nearest_button_impl(dom, input_id, true)
+}
+
+/// Find the nearest button (including hidden) to an input element.
+/// Used as fallback when no visible submit button exists (e.g. JS-rendered search engines).
+fn find_nearest_button(dom: &SpatialDom, input_id: u32) -> Option<u32> {
+    find_nearest_button_impl(dom, input_id, false)
+}
+
+fn detect_cookie_consent_action(dom: &SpatialDom) -> Option<SuggestedAction> {
+    // Find elements containing cookie-related text (the banner/notice itself)
+    let cookie_keywords = ["cookie", "cookies", "gdpr", "privacy notice", "consent to"];
+    let cookie_elements: Vec<&SpatialElement> = dom.els.iter()
+        .filter(|e| {
+            e.text.as_ref().map(|t| {
+                // Must be a substantial text block mentioning cookies, not just a word
+                let lower = t.to_lowercase();
+                t.len() > 30 && cookie_keywords.iter().any(|kw| lower.contains(kw))
+            }).unwrap_or(false)
+        })
+        .collect();
+
+    if cookie_elements.is_empty() {
+        return None;
+    }
+
+    // Cookie-specific accept/reject buttons (more specific than generic "accept")
+    let accept_words = [
+        "accept all", "accept cookies", "allow cookies", "allow all", "agree",
+        "got it", "i understand", "i agree",
+    ];
+    let reject_words = ["reject all", "reject cookies", "decline all", "refuse"];
+
+    // Only look at buttons (not links — "accept" as a link is usually not a cookie button)
+    let buttons: Vec<&SpatialElement> = dom.els.iter()
+        .filter(|e| e.tag == "button" || e.role.as_deref() == Some("button"))
+        .collect();
+
+    let accept_id = buttons.iter().find(|e| {
+        e.text.as_ref().map(|t| {
+            let lower = t.to_lowercase().trim().to_string();
+            accept_words.iter().any(|w| lower == *w || lower.contains(w))
+        }).unwrap_or(false)
+    }).map(|e| e.id)?;
+
+    let reject_id = buttons.iter().find(|e| {
+        e.text.as_ref().map(|t| {
+            let lower = t.to_lowercase().trim().to_string();
+            reject_words.iter().any(|w| lower == *w || lower.contains(w))
+        }).unwrap_or(false)
+    }).map(|e| e.id);
+
+    Some(SuggestedAction::CookieConsent { accept_id, reject_id })
+}
+
+fn detect_paginate_action(dom: &SpatialDom) -> Option<SuggestedAction> {
+    let pagination = dom.pagination()?;
+
+    // Find element IDs for next/prev links
+    let find_link_id = |url: &str| -> Option<u32> {
+        dom.els.iter().find(|e| {
+            e.href.as_deref() == Some(url)
+        }).map(|e| e.id)
+    };
+
+    let next_id = pagination.next.as_ref().and_then(|url| find_link_id(url));
+    let prev_id = pagination.prev.as_ref().and_then(|url| find_link_id(url));
+
+    if next_id.is_none() && prev_id.is_none() {
+        return None;
+    }
+
+    Some(SuggestedAction::Paginate { next_id, prev_id })
+}
+
+/// Detect a registration form: password + confirm password or email/name fields,
+/// but NOT already a login page (login has its own action).
+fn detect_register_action(dom: &SpatialDom) -> Option<SuggestedAction> {
+    // Must have a visible password field
+    let password = dom.els.iter().find(|e| {
+        e.hidden != Some(true) && e.input_type.as_deref() == Some("password")
+    })?;
+    let password_id = password.id;
+
+    // Must NOT be a login page — registration has either a confirm password field,
+    // or registration-related keywords in heading/title, or "register"/"sign up" in submit button
+    let all_passwords: Vec<&SpatialElement> = dom.els.iter().filter(|e| {
+        e.hidden != Some(true) && e.input_type.as_deref() == Some("password")
+    }).collect();
+
+    let title_lower = dom.title.to_lowercase();
+    let register_keywords = ["register", "sign up", "signup", "create account", "join", "new account"];
+    let login_keywords = ["login", "log in", "sign in", "signin"];
+
+    // If title or any visible text says "login"/"sign in", this is at least partially a
+    // login page. Pages like HN have both login and registration — Login takes priority.
+    let has_login_title = login_keywords.iter().any(|kw| title_lower.contains(kw));
+    // Check headings and bold text for login keywords (catches HN's <b>Login</b>)
+    let heading_or_bold_tags = ["h1", "h2", "h3", "h4", "h5", "h6", "b", "strong"];
+    let has_login_heading_or_bold = dom.els.iter().any(|e| {
+        e.hidden != Some(true)
+            && (e.role.as_deref() == Some("heading") || heading_or_bold_tags.contains(&e.tag.as_str()))
+            && e.text.as_ref().map(|t| {
+                let lower = t.to_lowercase();
+                login_keywords.iter().any(|kw| lower == *kw || lower.contains(kw))
+            }).unwrap_or(false)
+    });
+
+    let has_confirm_password = all_passwords.len() >= 2;
+
+    // When a page has both login and registration sections (2+ password fields + login text),
+    // prefer Login. The Login detector will pick up the first form.
+    if (has_login_title || has_login_heading_or_bold) && has_confirm_password {
+        return None;
+    }
+    let has_register_title = register_keywords.iter().any(|kw| title_lower.contains(kw));
+    let has_register_heading = dom.els.iter().any(|e| {
+        e.role.as_deref() == Some("heading")
+            && e.text.as_ref().map(|t| {
+                let lower = t.to_lowercase();
+                register_keywords.iter().any(|kw| lower.contains(kw))
+            }).unwrap_or(false)
+    });
+
+    if !has_confirm_password && !has_register_title && !has_register_heading {
+        return None;
+    }
+
+    // Find email field
+    let email_id = dom.els.iter().find(|e| {
+        e.hidden != Some(true) && (
+            e.input_type.as_deref() == Some("email")
+            || e.name.as_ref().map(|n| {
+                let lower = n.to_lowercase();
+                lower == "email" || lower == "e-mail"
+            }).unwrap_or(false)
+        )
+    }).map(|e| e.id);
+
+    // Find username field (text input with name suggesting username)
+    let username_id = dom.els.iter().find(|e| {
+        e.hidden != Some(true) && e.tag == "input"
+            && matches!(e.input_type.as_deref(), Some("text") | None)
+            && e.name.as_ref().map(|n| {
+                let lower = n.to_lowercase();
+                lower == "username" || lower == "user" || lower == "login"
+            }).unwrap_or(false)
+    }).map(|e| e.id);
+
+    // Find name field
+    let name_id = dom.els.iter().find(|e| {
+        e.hidden != Some(true) && e.tag == "input"
+            && matches!(e.input_type.as_deref(), Some("text") | None)
+            && e.name.as_ref().map(|n| {
+                let lower = n.to_lowercase();
+                lower == "name" || lower == "fullname" || lower == "full_name" || lower == "display_name"
+            }).unwrap_or(false)
+    }).map(|e| e.id);
+
+    // Confirm password is the second password field
+    let confirm_password_id = if has_confirm_password {
+        Some(all_passwords[1].id)
+    } else {
+        None
+    };
+
+    // Find submit button near the password field
+    let submit_id = find_nearest_submit_button(dom, password_id)?;
+
+    Some(SuggestedAction::Register {
+        email_id,
+        username_id,
+        password_id,
+        confirm_password_id,
+        name_id,
+        submit_id,
+    })
+}
+
+/// Detect a contact form: email + message textarea.
+fn detect_contact_action(dom: &SpatialDom) -> Option<SuggestedAction> {
+    // Must have a visible textarea (message body)
+    let textarea = dom.els.iter().find(|e| {
+        e.hidden != Some(true) && e.tag == "textarea"
+    })?;
+    let message_id = textarea.id;
+
+    // Must have contact-related context (title, heading, or form action)
+    let title_lower = dom.title.to_lowercase();
+    let contact_keywords = ["contact us", "contact form", "get in touch", "reach out", "send us a message", "inquiry"];
+    let has_contact_context = contact_keywords.iter().any(|kw| title_lower.contains(kw))
+        || dom.els.iter().any(|e| {
+            e.role.as_deref() == Some("heading")
+                && e.text.as_ref().map(|t| {
+                    let lower = t.to_lowercase();
+                    contact_keywords.iter().any(|kw| lower.contains(kw))
+                }).unwrap_or(false)
+        });
+
+    if !has_contact_context {
+        return None;
+    }
+
+    // Find email field
+    let email_id = dom.els.iter().find(|e| {
+        e.hidden != Some(true) && (
+            e.input_type.as_deref() == Some("email")
+            || e.name.as_ref().map(|n| {
+                let lower = n.to_lowercase();
+                lower == "email" || lower == "e-mail"
+            }).unwrap_or(false)
+        )
+    }).map(|e| e.id);
+
+    // Find name field
+    let name_id = dom.els.iter().find(|e| {
+        e.hidden != Some(true) && e.tag == "input"
+            && matches!(e.input_type.as_deref(), Some("text") | None)
+            && (e.name.as_ref().map(|n| {
+                let lower = n.to_lowercase();
+                lower == "name" || lower == "fullname" || lower == "full_name"
+            }).unwrap_or(false)
+            || e.label.as_ref().map(|l| {
+                let lower = l.to_lowercase();
+                lower.contains("name") && !lower.contains("email") && !lower.contains("user")
+            }).unwrap_or(false))
+    }).map(|e| e.id);
+
+    let submit_id = find_nearest_submit_button(dom, message_id)?;
+
+    Some(SuggestedAction::Contact {
+        name_id,
+        email_id,
+        message_id,
+        submit_id,
+    })
+}
+
+/// Detect a generic form and extract labeled fields for the FillForm action.
+/// Only fires for pages already classified as Form (2+ data-entry inputs) that
+/// don't match more specific form actions (Login, Register, Contact).
+fn detect_fill_form_action(dom: &SpatialDom, existing_actions: &[SuggestedAction]) -> Option<SuggestedAction> {
+    // Only for Form page types — don't generate FillForm on Login/Search pages
+    if dom.page_type != PageType::Form {
+        return None;
+    }
+
+    // Already have a more specific action?
+    let has_specific = existing_actions.iter().any(|a| {
+        matches!(a, SuggestedAction::Login { .. }
+            | SuggestedAction::Register { .. }
+            | SuggestedAction::Contact { .. }
+            | SuggestedAction::Search { .. }
+        )
+    });
+    if has_specific {
+        return None;
+    }
+
+    // Collect visible data-entry fields
+    let fields: Vec<FormField> = dom.els.iter().filter(|e| {
+        e.hidden != Some(true) && match e.tag.as_str() {
+            "textarea" | "select" => true,
+            "input" => !matches!(
+                e.input_type.as_deref(),
+                Some("checkbox") | Some("radio") | Some("hidden")
+                    | Some("submit") | Some("button") | Some("image")
+            ),
+            _ => false,
+        }
+    }).map(|e| FormField {
+        id: e.id,
+        label: e.label.clone().or_else(|| e.ph.clone()),
+        name: e.name.clone(),
+        input_type: e.input_type.clone(),
+    }).collect();
+
+    if fields.len() < 2 {
+        return None;
+    }
+
+    // Find a submit button near the last field
+    let last_field_id = fields.last().unwrap().id;
+    let submit_id = find_nearest_submit_button(dom, last_field_id)?;
+
+    Some(SuggestedAction::FillForm { fields, submit_id })
+}
+
+/// Detect download links/buttons on the page.
+/// Looks for links with download-related text or file extension hrefs.
+fn detect_download_action(dom: &SpatialDom) -> Option<SuggestedAction> {
+    let download_text_keywords = [
+        "download",
+    ];
+    let file_extensions = [
+        ".zip", ".tar.gz", ".dmg", ".exe", ".msi", ".deb", ".rpm",
+        ".pkg", ".appimage", ".pdf", ".csv", ".xlsx",
+    ];
+
+    let mut items = Vec::new();
+
+    for el in &dom.els {
+        if el.hidden == Some(true) { continue; }
+
+        let is_link_or_button = el.tag == "a" || el.tag == "button"
+            || el.role.as_deref() == Some("link")
+            || el.role.as_deref() == Some("button");
+        if !is_link_or_button { continue; }
+
+        // Text match: "download" must be the primary action — starts with "download"
+        // or is a short button text like "Download" / "Download now"
+        let text_match = el.text.as_ref().map(|t| {
+            let lower = t.to_lowercase().trim().to_string();
+            download_text_keywords.iter().any(|kw| {
+                lower.starts_with(kw) && (lower.len() < 40 || lower.contains('.'))
+            })
+        }).unwrap_or(false);
+
+        let href_match = el.href.as_ref().map(|h| {
+            let lower = h.to_lowercase();
+            file_extensions.iter().any(|ext| lower.ends_with(ext))
+        }).unwrap_or(false);
+
+        if text_match || href_match {
+            items.push(DownloadItem {
+                id: el.id,
+                text: el.text.clone(),
+                href: el.href.clone(),
+            });
+        }
+    }
+
+    if items.is_empty() {
+        return None;
+    }
+
+    Some(SuggestedAction::Download { items })
+}
+
+/// Detect a CaptchaChallenge action when CAPTCHA info is present or when the
+/// page type is Captcha with image-grid patterns (custom CAPTCHAs without a
+/// known service like reCAPTCHA/hCaptcha).
+fn detect_captcha_challenge_action(dom: &SpatialDom) -> Option<SuggestedAction> {
+    // Determine CAPTCHA type and sitekey: either from tree-detected service or
+    // by inferring from SpatialDom elements on a Captcha page.
+    let (ct, sk) = if let Some(captcha) = dom.captcha.as_ref() {
+        (captcha.captcha_type.clone(), captcha.sitekey.clone())
+    } else if dom.page_type == PageType::Captcha {
+        // No known CAPTCHA service detected in the HTML tree.
+        // Check for image grid pattern: multiple image buttons (≥4) suggest a
+        // "select all images containing X" challenge.
+        let image_buttons = dom.els.iter().filter(|e| {
+            e.hidden != Some(true)
+                && e.tag == "button"
+                && e.input_type.as_deref() != Some("submit")
+                && e.text.as_ref().map(|t| {
+                    let lower = t.to_lowercase();
+                    lower.contains("image") || lower.contains("img")
+                }).unwrap_or(false)
+        }).count();
+
+        if image_buttons >= 4 {
+            (CaptchaType::ImageGrid, None)
+        } else {
+            // Generic unknown CAPTCHA — still useful to surface
+            (CaptchaType::Unknown, None)
+        }
+    } else {
+        return None;
+    };
+
+    // Find the submit button
+    let submit_id = dom.els.iter()
+        .find(|e| {
+            e.hidden != Some(true)
+                && (e.tag == "button" || (e.tag == "input" && e.input_type.as_deref() == Some("submit")))
+                && e.text.as_ref().map(|t| {
+                    let lower = t.to_lowercase();
+                    lower.contains("verify") || lower.contains("submit") || lower.contains("continue")
+                        || lower.contains("proceed")
+                }).unwrap_or(false)
+        })
+        // Fallback: any visible submit button
+        .or_else(|| dom.els.iter().find(|e| {
+            e.hidden != Some(true)
+                && (e.tag == "button" || (e.tag == "input" && e.input_type.as_deref() == Some("submit")))
+        }))
+        .map(|e| e.id);
+
+    Some(SuggestedAction::CaptchaChallenge {
+        captcha_type: ct,
+        sitekey: sk,
+        submit_id,
+    })
+}
+
+// --- CAPTCHA detection from layout tree ---
+
+/// Scan the layout tree for CAPTCHA service indicators.
+/// Checks `<script src>`, `<iframe src>`, `<div class>`, `data-sitekey`, and
+/// `<noscript>` content for reCAPTCHA, hCaptcha, Turnstile, and Cloudflare signals.
+fn detect_captcha_from_tree(root: &LayoutNode) -> Option<CaptchaInfo> {
+    let mut captcha_type: Option<CaptchaType> = None;
+    let mut sitekey: Option<String> = None;
+
+    scan_captcha_recursive(root, &mut captcha_type, &mut sitekey);
+
+    captcha_type.map(|ct| CaptchaInfo {
+        captcha_type: ct,
+        sitekey,
+    })
+}
+
+fn scan_captcha_recursive(
+    node: &LayoutNode,
+    captcha_type: &mut Option<CaptchaType>,
+    sitekey: &mut Option<String>,
+) {
+    let tag = node.tag.as_str();
+
+    // Check script src for CAPTCHA service URLs
+    if tag == "script" {
+        if let Some(src) = node.attributes.get("src") {
+            let src_lower = src.to_lowercase();
+            if src_lower.contains("recaptcha") || src_lower.contains("google.com/recaptcha") {
+                *captcha_type = Some(CaptchaType::ReCaptcha);
+            } else if src_lower.contains("hcaptcha.com") {
+                *captcha_type = Some(CaptchaType::HCaptcha);
+            } else if src_lower.contains("challenges.cloudflare.com/turnstile") {
+                *captcha_type = Some(CaptchaType::Turnstile);
+            }
+        }
+    }
+
+    // Check iframe src for CAPTCHA embeds
+    if tag == "iframe" {
+        if let Some(src) = node.attributes.get("src") {
+            let src_lower = src.to_lowercase();
+            if src_lower.contains("recaptcha") || src_lower.contains("google.com/recaptcha") {
+                *captcha_type = Some(CaptchaType::ReCaptcha);
+            } else if src_lower.contains("hcaptcha.com") || src_lower.contains("newassets.hcaptcha.com") {
+                *captcha_type = Some(CaptchaType::HCaptcha);
+            }
+        }
+    }
+
+    // Check div class for CAPTCHA containers
+    if tag == "div" {
+        if let Some(class) = node.attributes.get("class") {
+            let class_lower = class.to_lowercase();
+            if class_lower.contains("g-recaptcha") {
+                *captcha_type = Some(CaptchaType::ReCaptcha);
+            } else if class_lower.contains("h-captcha") {
+                *captcha_type = Some(CaptchaType::HCaptcha);
+            } else if class_lower.contains("cf-turnstile") {
+                *captcha_type = Some(CaptchaType::Turnstile);
+            }
+        }
+    }
+
+    // Check for data-sitekey attribute (all major CAPTCHA services use this)
+    if let Some(key) = node.attributes.get("data-sitekey") {
+        if !key.is_empty() {
+            *sitekey = Some(key.clone());
+        }
+    }
+
+    // Cloudflare JS challenge detection: specific meta/body patterns
+    // Cloudflare challenge pages have <title>Just a moment...</title> (handled in detect_page_type)
+    // but also <div id="challenge-running"> or <div id="cf-challenge-running">
+    if tag == "div" {
+        if let Some(id) = node.attributes.get("id") {
+            let id_lower = id.to_lowercase();
+            if id_lower.contains("challenge-running") || id_lower.contains("cf-challenge") {
+                if captcha_type.is_none() {
+                    *captcha_type = Some(CaptchaType::CloudflareChallenge);
+                }
+            }
+        }
+    }
+
+    for child in &node.children {
+        scan_captcha_recursive(child, captcha_type, sitekey);
+    }
+}
+
+fn find_nearest_button_impl(dom: &SpatialDom, input_id: u32, visible_only: bool) -> Option<u32> {
     let input = dom.get(input_id)?;
     let input_y = input.b[1];
     let input_x = input.b[0];
@@ -1546,7 +2264,7 @@ pub(crate) fn find_nearest_submit_button(dom: &SpatialDom, input_id: u32) -> Opt
     let mut best: Option<(u32, i32)> = None;
 
     for el in &dom.els {
-        if el.hidden == Some(true) { continue; }
+        if visible_only && el.hidden == Some(true) { continue; }
         let is_button = el.tag == "button"
             || (el.tag == "input" && el.input_type.as_deref() == Some("submit"));
         if !is_button { continue; }
