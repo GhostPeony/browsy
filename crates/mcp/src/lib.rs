@@ -20,6 +20,8 @@ pub struct BrowseParams {
     pub url: String,
     #[schemars(description = "Output format: 'compact' (default) or 'json'")]
     pub format: Option<String>,
+    #[schemars(description = "Scope: 'all' (default), 'visible', 'above_fold', or 'visible_above_fold'")]
+    pub scope: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -54,6 +56,8 @@ pub struct SelectParams {
 pub struct GetPageParams {
     #[schemars(description = "Output format: 'compact' (default) or 'json'")]
     pub format: Option<String>,
+    #[schemars(description = "Scope: 'all' (default), 'visible', 'above_fold', or 'visible_above_fold'")]
+    pub scope: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -101,6 +105,23 @@ pub fn format_page(dom: &output::SpatialDom, format: Option<&str>) -> String {
             header.push_str(&output::to_compact_string(dom));
             header
         }
+    }
+}
+
+fn apply_scope(mut dom: output::SpatialDom, scope: Option<&str>) -> output::SpatialDom {
+    match scope.unwrap_or("all") {
+        "visible" => {
+            dom.els = dom.els.into_iter().filter(|e| e.hidden != Some(true)).collect();
+            dom.rebuild_index();
+            dom
+        }
+        "above_fold" => dom.filter_above_fold(),
+        "visible_above_fold" => {
+            dom.els = dom.els.into_iter().filter(|e| e.hidden != Some(true)).collect();
+            dom.rebuild_index();
+            dom.filter_above_fold()
+        }
+        _ => dom,
     }
 }
 
@@ -152,7 +173,8 @@ impl BrowsyServer {
             text.push_str(" — this page requires human verification to proceed.\n");
         }
 
-        text.push_str(&format_page(&dom, params.format.as_deref()));
+        let scoped = apply_scope(dom, params.scope.as_deref());
+        text.push_str(&format_page(&scoped, params.format.as_deref()));
         Ok(CallToolResult::success(vec![Content::text(text)]))
     }
 
@@ -236,7 +258,8 @@ impl BrowsyServer {
     ) -> Result<CallToolResult, McpError> {
         let session = self.session.lock().unwrap();
         let dom = session.dom().ok_or_else(|| err("No page loaded"))?;
-        let text = format_page(&dom, params.format.as_deref());
+        let scoped = apply_scope(dom, params.scope.as_deref());
+        let text = format_page(&scoped, params.format.as_deref());
         Ok(CallToolResult::success(vec![Content::text(text)]))
     }
 

@@ -53,7 +53,7 @@ fn test_get_page() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(async {
             server
-                .get_page(Parameters(GetPageParams { format: None }))
+                .get_page(Parameters(GetPageParams { format: None, scope: None }))
                 .await
                 .unwrap()
         });
@@ -114,7 +114,7 @@ fn test_type_text_and_get_page() {
         let (typed_text, page_text) = rt.block_on(async {
             // Find the input element ID
             let result = server
-                .get_page(Parameters(GetPageParams { format: Some("json".to_string()) }))
+                .get_page(Parameters(GetPageParams { format: Some("json".to_string()), scope: None }))
                 .await
                 .unwrap();
             let text = extract_text(result);
@@ -140,7 +140,7 @@ fn test_type_text_and_get_page() {
 
             // Verify value in get_page
             let result = server
-                .get_page(Parameters(GetPageParams { format: Some("json".to_string()) }))
+                .get_page(Parameters(GetPageParams { format: Some("json".to_string()), scope: None }))
                 .await
                 .unwrap();
             let page_text = extract_text(result);
@@ -259,7 +259,7 @@ fn test_error_on_no_page() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(async {
             server
-                .get_page(Parameters(GetPageParams { format: None }))
+                .get_page(Parameters(GetPageParams { format: None, scope: None }))
                 .await
         });
         drop(rt);

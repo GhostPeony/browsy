@@ -26,6 +26,14 @@ enum Commands {
         /// Skip fetching external CSS stylesheets
         #[arg(long)]
         no_css: bool,
+
+        /// Only include visible (non-hidden) elements
+        #[arg(long)]
+        visible_only: bool,
+
+        /// Only include above-fold elements
+        #[arg(long)]
+        above_fold: bool,
     },
     /// Parse a local HTML string and output the Spatial DOM
     Parse {
@@ -62,6 +70,8 @@ fn main() {
             json,
             viewport,
             no_css,
+            visible_only,
+            above_fold,
         } => {
             let (vw, vh) = parse_viewport(&viewport);
             let config = fetch::FetchConfig {
@@ -72,7 +82,10 @@ fn main() {
             };
 
             match fetch::fetch(&url, &config) {
-                Ok(dom) => print_dom(&dom, json),
+                Ok(dom) => {
+                    let scoped = apply_scope(dom, visible_only, above_fold);
+                    print_dom(&scoped, json)
+                }
                 Err(e) => {
                     eprintln!("Error: {}", e);
                     std::process::exit(1);
@@ -98,6 +111,17 @@ fn main() {
             print_dom(&dom, json);
         }
     }
+}
+
+fn apply_scope(mut dom: output::SpatialDom, visible_only: bool, above_fold: bool) -> output::SpatialDom {
+    if visible_only {
+        dom.els = dom.els.into_iter().filter(|e| e.hidden != Some(true)).collect();
+        dom.rebuild_index();
+    }
+    if above_fold {
+        dom = dom.filter_above_fold();
+    }
+    dom
 }
 
 fn print_dom(dom: &output::SpatialDom, as_json: bool) {
