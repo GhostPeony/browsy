@@ -58,6 +58,18 @@ cat page.html | browsy parse
 browsy fetch https://example.com --format json
 ```
 
+## REST API server
+
+The CLI includes a built-in REST API + A2A server:
+
+```bash
+browsy serve
+browsy serve --port 8080
+browsy serve --allow-private-network
+```
+
+See [REST API](rest-api.md) for endpoint documentation and [A2A Protocol](a2a.md) for agent-to-agent integration.
+
 ## Python
 
 browsy has PyO3 bindings published as the `browsy` package:
@@ -82,6 +94,21 @@ session.click(34)
 ```
 
 The Python bindings expose the same `Session` API as the Rust library, including `login`, `search`, `enter_code`, and all form interaction methods.
+
+### Framework integrations
+
+Install browsy with framework-specific extras:
+
+```bash
+pip install browsy[langchain]   # LangChain tools
+pip install browsy[crewai]      # CrewAI tool
+pip install browsy[openai]      # OpenAI function calling
+pip install browsy[autogen]     # AutoGen integration
+pip install browsy[smolagents]  # HuggingFace smolagents
+pip install browsy[all]         # All integrations
+```
+
+See [Framework Integrations](framework-integrations.md) for usage guides.
 
 ### Requirements
 

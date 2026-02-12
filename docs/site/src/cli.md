@@ -1,6 +1,6 @@
 # CLI Usage
 
-The browsy CLI provides two commands: `fetch` for URLs and `parse` for local HTML files.
+The browsy CLI provides three commands: `fetch` for URLs, `parse` for local HTML files, and `serve` for the REST API server.
 
 ## Installation
 
@@ -77,6 +77,34 @@ browsy parse index.html --json
 # Parse from stdin
 cat page.html | browsy parse -
 ```
+
+### serve
+
+Start the REST API + A2A server.
+
+```bash
+browsy serve [OPTIONS]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--port <PORT>` | Port to listen on (default: `3847`) |
+| `--allow-private-network` | Allow fetching private/LAN addresses |
+
+**Examples:**
+
+```bash
+# Start on default port
+browsy serve
+
+# Custom port
+browsy serve --port 8080
+
+# Allow local development server access
+browsy serve --allow-private-network
+```
+
+The server exposes a REST API and A2A protocol endpoints. See [REST API](rest-api.md) and [A2A Protocol](a2a.md).
 
 ## Output formats
 

@@ -37,6 +37,23 @@ browsy gives agents exactly that:
 
 browsy is not a browser replacement. It's the **fast path** -- handles 70%+ of agent tasks (reading pages, filling forms, following links, searching) at a fraction of the cost. For JS-heavy SPAs, fall back to a real browser.
 
+### Why browsy is faster (observed in benchmarks)
+
+- **No pixel rendering**: no compositor/GPU, no screenshots, no vision model.
+- **Semantic targeting**: actions use IDs, labels, roles, and form structure instead of screen coordinates.
+- **Lower work per step**: many interactions operate on the in-memory DOM without refetching.
+- **Lower token output**: compact Spatial DOM is smaller than screenshots or accessibility trees.
+
+### What browsy is built for
+
+- **Form-heavy workflows**: login, signup, search, contact forms, checkout steps.
+- **High-throughput extraction**: many parallel agents per machine.
+- **Predictable cost**: token-efficient output with explicit action IDs and guidance.
+
+### Why we’re building it this way
+
+Screenshot-based automation is slow, expensive, and brittle. Agents don’t need pixels — they need structure and intent. browsy optimizes for **speed, simplicity, and accuracy** for the majority of server-rendered or lightly dynamic pages, while allowing fallbacks to full browsers only when necessary.
+
 ## Features
 
 ### Hidden content exposure
@@ -148,6 +165,98 @@ session.back()?;
 - `dom()` -- get the current Spatial DOM
 - `delta()` -- get only what changed since the last navigation
 - `behaviors()` -- list detected interactive behaviors
+
+### Framework integrations
+
+browsy integrates with popular Python AI frameworks via optional dependencies:
+
+**LangChain:**
+```bash
+pip install browsy[langchain]
+```
+```python
+from browsy.langchain import get_tools
+tools = get_tools()  # -> [BrowsyBrowseTool, BrowsyClickTool, ...]
+```
+
+**CrewAI:**
+```bash
+pip install browsy[crewai]
+```
+```python
+from browsy.crewai import BrowsyTool
+tool = BrowsyTool()  # Single tool with all actions
+```
+
+**OpenAI function calling:**
+```bash
+pip install browsy[openai]
+```
+```python
+from browsy.openai import get_tool_definitions, handle_tool_call
+tools = get_tool_definitions()
+result = handle_tool_call("browsy_browse", {"url": "https://example.com"})
+```
+
+**AutoGen:**
+```bash
+pip install browsy[autogen]
+```
+```python
+from browsy.autogen import BrowsyBrowser
+browser = BrowsyBrowser()  # AutoGen-compatible agent tool
+```
+
+**Smolagents:**
+```bash
+pip install browsy[smolagents]
+```
+```python
+from browsy.smolagents import BrowsyTool
+tool = BrowsyTool()  # HuggingFace smolagents tool
+```
+
+Install all integrations at once: `pip install browsy[all]`
+
+### REST API server
+
+browsy includes a REST API server for language-agnostic access:
+
+```bash
+browsy serve --port 3847
+```
+
+Endpoints:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/browse` | Navigate to a URL |
+| POST | `/api/click` | Click an element by ID |
+| POST | `/api/type` | Type into an input field |
+| POST | `/api/search` | Web search |
+| POST | `/api/login` | Fill and submit a login form |
+| GET | `/api/page` | Get current page DOM |
+| GET | `/api/page-info` | Page metadata and suggested actions |
+| GET | `/api/tables` | Extract structured table data |
+
+Sessions are managed via the `X-Browsy-Session` header. The server creates a session on first request and returns the token in the response header.
+
+### A2A protocol
+
+browsy implements Google's [Agent-to-Agent (A2A) protocol](https://google.github.io/A2A/) for agent discovery and task delegation:
+
+- **Agent card**: `GET /.well-known/agent.json` -- describes browsy's capabilities
+- **Task execution**: `POST /a2a/tasks` -- accepts a goal in natural language, streams progress via SSE
+
+```bash
+# Discover the agent
+curl http://localhost:3847/.well-known/agent.json
+
+# Execute a task
+curl -X POST http://localhost:3847/a2a/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"goal": "Search for browsy on DuckDuckGo and return the top results"}'
+```
 
 ### Viewport filtering
 
@@ -276,6 +385,10 @@ browsy fetch https://example.com
 browsy fetch https://example.com --json
 browsy fetch https://example.com --viewport 375x812  # mobile
 browsy parse index.html
+
+# Start the REST API + A2A server
+browsy serve
+browsy serve --port 8080
 ```
 
 ### Without networking
@@ -289,6 +402,20 @@ browsy-core = { version = "0.1", default-features = false }
 
 ```rust
 let dom = browsy_core::parse(html, 1920.0, 1080.0);
+```
+
+### As a Python package
+
+```bash
+pip install browsy
+
+# With framework integrations
+pip install browsy[langchain]   # LangChain tools
+pip install browsy[crewai]      # CrewAI tool
+pip install browsy[openai]      # OpenAI function calling
+pip install browsy[autogen]     # AutoGen integration
+pip install browsy[smolagents]  # HuggingFace smolagents
+pip install browsy[all]         # All integrations
 ```
 
 ## Architecture
@@ -322,10 +449,11 @@ HTML string
 
 ## Testing
 
-69 integration tests across 5 test modules:
+88+ integration tests across 6 test modules:
 
 ```bash
 cargo test -p browsy-core
+cargo test -p browsy-server
 ```
 
 | Module | Tests | Covers |
@@ -335,6 +463,7 @@ cargo test -p browsy-core
 | `session` | 12 | Navigation, forms, interactions, search (DuckDuckGo + Google) |
 | `js` | 6 | Behavior detection, toggle simulation, Bootstrap patterns |
 | `realworld` | 4 | Live site testing (Hacker News, Wikipedia, GitHub, Craigslist) |
+| `server` | 19 | REST API endpoints, CORS, sessions, A2A protocol |
 
 ## Real-world results
 
