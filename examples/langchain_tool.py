@@ -1,13 +1,13 @@
 # DEPRECATED: This example has moved into the browsy package.
 # Use: from browsy.langchain import get_tools
-# Install: pip install browsy[langchain]
+# Install: pip install browsy-ai[langchain]
 # See: crates/python/browsy/_integrations/langchain.py
 
 """
 browsy LangChain Tool -- drop-in web browsing tool for LangChain agents.
 
 Usage:
-    pip install browsy langchain
+    pip install browsy-ai langchain
 
     from langchain_tool import BrowsyBrowseTool, BrowsySearchTool
     tools = [BrowsyBrowseTool(), BrowsySearchTool()]

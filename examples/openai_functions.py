@@ -1,13 +1,13 @@
 # DEPRECATED: This example has moved into the browsy package.
 # Use: from browsy.openai import get_tool_definitions, handle_tool_call
-# Install: pip install browsy[openai]
+# Install: pip install browsy-ai[openai]
 # See: crates/python/browsy/_integrations/openai.py
 
 """
 browsy OpenAI Function Calling -- tool definitions for any OpenAI-compatible agent.
 
 Usage:
-    pip install browsy openai
+    pip install browsy-ai openai
 
     tools = get_browsy_tool_definitions()
     response = client.chat.completions.create(model="gpt-4", tools=tools, ...)

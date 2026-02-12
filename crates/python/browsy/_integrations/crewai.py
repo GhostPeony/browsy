@@ -1,6 +1,6 @@
 """browsy CrewAI integration — single-tool web browser for CrewAI agents.
 
-Install: pip install browsy[crewai]
+Install: pip install browsy-ai[crewai]
 
 Usage:
     from browsy.crewai import BrowsyTool
@@ -12,7 +12,7 @@ try:
 except ImportError:
     raise ImportError(
         "CrewAI is required for this integration. "
-        "Install it with: pip install browsy[crewai]"
+        "Install it with: pip install browsy-ai[crewai]"
     )
 
 from typing import Optional

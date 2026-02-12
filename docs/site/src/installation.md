@@ -72,10 +72,10 @@ See [REST API](rest-api.md) for endpoint documentation and [A2A Protocol](a2a.md
 
 ## Python
 
-browsy has PyO3 bindings published as the `browsy` package:
+browsy has PyO3 bindings published as the `browsy-ai` package:
 
 ```bash
-pip install browsy
+pip install browsy-ai
 ```
 
 ```python
@@ -100,12 +100,12 @@ The Python bindings expose the same `Session` API as the Rust library, including
 Install browsy with framework-specific extras:
 
 ```bash
-pip install browsy[langchain]   # LangChain tools
-pip install browsy[crewai]      # CrewAI tool
-pip install browsy[openai]      # OpenAI function calling
-pip install browsy[autogen]     # AutoGen integration
-pip install browsy[smolagents]  # HuggingFace smolagents
-pip install browsy[all]         # All integrations
+pip install browsy-ai[langchain]   # LangChain tools
+pip install browsy-ai[crewai]      # CrewAI tool
+pip install browsy-ai[openai]      # OpenAI function calling
+pip install browsy-ai[autogen]     # AutoGen integration
+pip install browsy-ai[smolagents]  # HuggingFace smolagents
+pip install browsy-ai[all]         # All integrations
 ```
 
 See [Framework Integrations](framework-integrations.md) for usage guides.

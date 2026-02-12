@@ -240,12 +240,12 @@ const result = await generateText({ model: openai("gpt-4o"), tools: browsyTools(
 
 **Python:**
 ```bash
-pip install browsy[langchain]   # LangChain tools
-pip install browsy[crewai]      # CrewAI tool
-pip install browsy[openai]      # OpenAI function calling
-pip install browsy[autogen]     # AutoGen integration
-pip install browsy[smolagents]  # HuggingFace smolagents
-pip install browsy[all]         # All integrations
+pip install browsy-ai[langchain]   # LangChain tools
+pip install browsy-ai[crewai]      # CrewAI tool
+pip install browsy-ai[openai]      # OpenAI function calling
+pip install browsy-ai[autogen]     # AutoGen integration
+pip install browsy-ai[smolagents]  # HuggingFace smolagents
+pip install browsy-ai[all]         # All integrations
 ```
 
 ```python
@@ -463,15 +463,15 @@ The `browsy-ai` npm package includes a core SDK plus integrations for LangChain.
 ### As a Python package
 
 ```bash
-pip install browsy
+pip install browsy-ai
 
 # With framework integrations
-pip install browsy[langchain]   # LangChain tools
-pip install browsy[crewai]      # CrewAI tool
-pip install browsy[openai]      # OpenAI function calling
-pip install browsy[autogen]     # AutoGen integration
-pip install browsy[smolagents]  # HuggingFace smolagents
-pip install browsy[all]         # All integrations
+pip install browsy-ai[langchain]   # LangChain tools
+pip install browsy-ai[crewai]      # CrewAI tool
+pip install browsy-ai[openai]      # OpenAI function calling
+pip install browsy-ai[autogen]     # AutoGen integration
+pip install browsy-ai[smolagents]  # HuggingFace smolagents
+pip install browsy-ai[all]         # All integrations
 ```
 
 ## Architecture

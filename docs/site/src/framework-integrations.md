@@ -54,12 +54,12 @@ See the full [JavaScript / TypeScript guide](./javascript.md) for complete examp
 Install browsy with the extras for your framework:
 
 ```bash
-pip install browsy[langchain]   # LangChain tools
-pip install browsy[crewai]      # CrewAI tool
-pip install browsy[openai]      # OpenAI function calling
-pip install browsy[autogen]     # AutoGen integration
-pip install browsy[smolagents]  # HuggingFace smolagents
-pip install browsy[all]         # All integrations
+pip install browsy-ai[langchain]   # LangChain tools
+pip install browsy-ai[crewai]      # CrewAI tool
+pip install browsy-ai[openai]      # OpenAI function calling
+pip install browsy-ai[autogen]     # AutoGen integration
+pip install browsy-ai[smolagents]  # HuggingFace smolagents
+pip install browsy-ai[all]         # All integrations
 ```
 
 All Python integrations share a lazily-initialized `Browser` instance. You can pass your own `Browser` for custom viewport configuration.

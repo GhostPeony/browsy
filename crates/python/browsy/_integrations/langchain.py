@@ -1,6 +1,6 @@
 """browsy LangChain integration — drop-in web browsing tools for LangChain agents.
 
-Install: pip install browsy[langchain]
+Install: pip install browsy-ai[langchain]
 
 Usage:
     from browsy.langchain import get_tools
@@ -14,7 +14,7 @@ try:
 except ImportError:
     raise ImportError(
         "LangChain is required for this integration. "
-        "Install it with: pip install browsy[langchain]"
+        "Install it with: pip install browsy-ai[langchain]"
     )
 
 from typing import Optional, Type

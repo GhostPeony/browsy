@@ -5,7 +5,7 @@ browsy provides Python bindings via PyO3. The API closely mirrors the Rust `Sess
 ## Installation
 
 ```bash
-pip install browsy
+pip install browsy-ai
 ```
 
 The package ships a compiled native extension (`_core.pyd` / `_core.so`). No Rust toolchain required for installation from wheels.

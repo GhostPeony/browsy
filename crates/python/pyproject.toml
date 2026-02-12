@@ -3,7 +3,7 @@ requires = ["maturin>=1,<2"]
 build-backend = "maturin"
 
 [project]
-name = "browsy"
+name = "browsy-ai"
 version = "0.1.0"
 description = "Zero-render browser engine for AI agents"
 requires-python = ">=3.9"
@@ -28,7 +28,7 @@ crewai = ["crewai>=0.80,<2"]
 openai = ["openai>=1.0,<3"]
 autogen = ["pyautogen>=0.4,<1"]
 smolagents = ["smolagents>=1.0,<2"]
-all = ["browsy[langchain]", "browsy[crewai]", "browsy[openai]", "browsy[autogen]", "browsy[smolagents]"]
+all = ["browsy-ai[langchain]", "browsy-ai[crewai]", "browsy-ai[openai]", "browsy-ai[autogen]", "browsy-ai[smolagents]"]
 
 [project.urls]
 Repository = "https://github.com/GhostPeony/browsy"

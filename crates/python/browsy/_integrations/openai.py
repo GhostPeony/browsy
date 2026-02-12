@@ -1,6 +1,6 @@
 """browsy OpenAI function calling integration.
 
-Install: pip install browsy[openai]
+Install: pip install browsy-ai[openai]
 
 Usage:
     from browsy.openai import get_tool_definitions, handle_tool_call

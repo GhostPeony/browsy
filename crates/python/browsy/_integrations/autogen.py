@@ -1,6 +1,6 @@
 """browsy AutoGen integration — browsing agent for AutoGen group chats.
 
-Install: pip install browsy[autogen]
+Install: pip install browsy-ai[autogen]
 
 Usage:
     from browsy.autogen import BrowsyBrowser
@@ -13,7 +13,7 @@ try:
 except ImportError:
     raise ImportError(
         "AutoGen is required for this integration. "
-        "Install it with: pip install browsy[autogen]"
+        "Install it with: pip install browsy-ai[autogen]"
     )
 
 from browsy._integrations._shared import get_browser, format_page, format_search_results

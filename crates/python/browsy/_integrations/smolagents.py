@@ -1,6 +1,6 @@
 """browsy Smolagents integration — web browser tool for HuggingFace agents.
 
-Install: pip install browsy[smolagents]
+Install: pip install browsy-ai[smolagents]
 
 Usage:
     from browsy.smolagents import BrowsyTool
@@ -12,7 +12,7 @@ try:
 except ImportError:
     raise ImportError(
         "Smolagents is required for this integration. "
-        "Install it with: pip install browsy[smolagents]"
+        "Install it with: pip install browsy-ai[smolagents]"
     )
 
 from browsy._integrations._shared import get_browser, format_page, format_search_results
