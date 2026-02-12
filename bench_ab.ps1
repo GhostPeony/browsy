@@ -1,4 +1,6 @@
-npx agent-browser close 2>&1 | Out-Null
+$env:NPM_CONFIG_YES = "true"
+npx --yes agent-browser --version 2>&1 | Out-Null
+npx --yes agent-browser close 2>&1 | Out-Null
 $sites = @(
     'https://news.ycombinator.com',
     'https://github.com/login',
@@ -18,8 +20,8 @@ $sites = @(
 Write-Output "SITE|MS|LINES|CHARS"
 foreach ($url in $sites) {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    npx agent-browser open $url 2>&1 | Out-Null
-    $snap = npx agent-browser snapshot -i 2>&1 | Out-String
+    npx --yes agent-browser open $url 2>&1 | Out-Null
+    $snap = npx --yes agent-browser snapshot -i 2>&1 | Out-String
     $ms = $sw.ElapsedMilliseconds
     $chars = $snap.Length
     $lines = ($snap -split "`n").Count
