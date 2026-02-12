@@ -65,6 +65,7 @@ fn parse_page_type(s: &str) -> Option<PageType> {
         "TwoFactorAuth" => Some(PageType::TwoFactorAuth),
         "OAuthConsent" => Some(PageType::OAuthConsent),
         "Captcha" => Some(PageType::Captcha),
+        "Blocked" => Some(PageType::Blocked),
         "Search" => Some(PageType::Search),
         "SearchResults" => Some(PageType::SearchResults),
         "Inbox" => Some(PageType::Inbox),
@@ -76,7 +77,7 @@ fn parse_page_type(s: &str) -> Option<PageType> {
         "Error" => Some(PageType::Error),
         "Other" => Some(PageType::Other),
         "Any" => None,
-        _ => panic!("Unknown page type in manifest: {:?}. Valid values: Login, TwoFactorAuth, OAuthConsent, Captcha, Search, SearchResults, Inbox, EmailBody, Dashboard, Form, Article, List, Error, Other, Any", s),
+        _ => panic!("Unknown page type in manifest: {:?}. Valid values: Login, TwoFactorAuth, OAuthConsent, Captcha, Blocked, Search, SearchResults, Inbox, EmailBody, Dashboard, Form, Article, List, Error, Other, Any", s),
     }
 }
 
@@ -94,6 +95,7 @@ fn action_type_name(action: &SuggestedAction) -> &str {
         SuggestedAction::FillForm { .. } => "FillForm",
         SuggestedAction::Download { .. } => "Download",
         SuggestedAction::CaptchaChallenge { .. } => "CaptchaChallenge",
+        SuggestedAction::RetryGuidance { .. } => "RetryGuidance",
     }
 }
 
@@ -154,6 +156,7 @@ fn action_ids(action: &SuggestedAction) -> Vec<u32> {
             if let Some(id) = submit_id { ids.push(*id); }
             ids
         }
+        SuggestedAction::RetryGuidance { .. } => Vec::new(),
     }
 }
 

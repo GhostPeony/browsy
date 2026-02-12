@@ -1,0 +1,2 @@
+"date","mode","instances","iteration","wall_ms","peak_working_set_mb_total","peak_working_set_mb_avg","peak_working_set_mb_total_tree","peak_working_set_mb_avg_tree","input_html","url"
+"2026-02-12","fetch","10","1","1862","32.57","8.14","32.57","8.14","","https://httpbin.org/forms/post"

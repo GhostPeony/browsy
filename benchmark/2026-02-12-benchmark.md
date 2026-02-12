@@ -60,6 +60,8 @@ Note: release rebuild of `browsy-mcp.exe` failed due to file lock (in use by Cla
 - MCP: `browse` and `get_page` now accept scope (`all|visible|above_fold|visible_above_fold`).
 - Perf runner: adaptive status evaluation with configurable thresholds.
 - Live script: `bench_browsy_adaptive.ps1` flags `OK|WARN|NEEDS_HUMAN`.
+- Fetch retry policy: default retries with alternate user agents and blocked-page heuristics.
+- Report generator: `benchmark/bench_browsy_report.ps1` writes CSV/JSON to `benchmark/results/`.
 
 ## Recommended next iteration
 1) Set MCP usage defaults to `visible_above_fold` in agent workflows for low token budgets.

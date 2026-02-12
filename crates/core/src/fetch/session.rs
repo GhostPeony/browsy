@@ -8,13 +8,17 @@ use super::{
     find_form_index_for_button,
     is_url_allowed,
     read_response_text_limited,
+    fetch_html_with_retry,
 };
 use crate::output::{CaptchaInfo, PageType, SpatialDom, SpatialElement, SuggestedAction};
 use reqwest::blocking::Client;
 use reqwest::redirect::Policy;
+use reqwest::header::{RETRY_AFTER, USER_AGENT};
 use serde::{Serialize, Deserialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 use url::Url;
 
 /// Configuration for a browsy session.
@@ -31,23 +35,32 @@ pub struct SessionConfig {
     pub max_redirects: usize,
     pub allow_private_network: bool,
     pub allow_non_http: bool,
+    pub retry_attempts: usize,
+    pub retry_delay_ms: u64,
+    pub retry_on_blocked: bool,
+    pub retry_user_agents: Vec<String>,
 }
 
 impl Default for SessionConfig {
     fn default() -> Self {
+        let fetch = FetchConfig::default();
         Self {
             viewport_width: 1920.0,
             viewport_height: 1080.0,
-            user_agent: FetchConfig::default().user_agent,
+            user_agent: fetch.user_agent,
             timeout_secs: 30,
             fetch_css: true,
             blocked_patterns: super::default_blocked_patterns(),
-            max_response_bytes: FetchConfig::default().max_response_bytes,
-            max_css_bytes_total: FetchConfig::default().max_css_bytes_total,
-            max_css_bytes_per_file: FetchConfig::default().max_css_bytes_per_file,
-            max_redirects: FetchConfig::default().max_redirects,
-            allow_private_network: FetchConfig::default().allow_private_network,
-            allow_non_http: FetchConfig::default().allow_non_http,
+            max_response_bytes: fetch.max_response_bytes,
+            max_css_bytes_total: fetch.max_css_bytes_total,
+            max_css_bytes_per_file: fetch.max_css_bytes_per_file,
+            max_redirects: fetch.max_redirects,
+            allow_private_network: fetch.allow_private_network,
+            allow_non_http: fetch.allow_non_http,
+            retry_attempts: fetch.retry_attempts,
+            retry_delay_ms: fetch.retry_delay_ms,
+            retry_on_blocked: fetch.retry_on_blocked,
+            retry_user_agents: fetch.retry_user_agents,
         }
     }
 }
@@ -124,24 +137,13 @@ impl Session {
             return Err(FetchError::BlockedUrl(parsed_url.to_string()));
         }
 
-        let response = self
-            .client
-            .get(parsed_url.as_str())
-            .send()
-            .map_err(|e| FetchError::Network(e.to_string()))?;
+        let html = self.fetch_html_with_retry(&parsed_url)?;
 
-        let status = response.status();
-        if !status.is_success() {
-            return Err(FetchError::HttpError(status.as_u16()));
-        }
-
-        let html = read_response_text_limited(response, self.config.max_response_bytes)?;
-
-        self.load_html(&html, url)?;
+        let dom = self.load_html(&html, url)?;
         self.history.push(url.to_string());
         self.current_url = Some(parsed_url);
 
-        Ok(self.current_dom.as_ref().unwrap().clone())
+        Ok(dom)
     }
 
     /// Load HTML content directly (without fetching).
@@ -186,6 +188,7 @@ impl Session {
         spatial.url = url.to_string();
         crate::output::resolve_urls(&mut spatial, url);
 
+        let result = spatial.clone();
         self.previous_dom = self.current_dom.take();
         self.current_dom = Some(spatial);
         self.current_html = Some(html.to_string());
@@ -193,7 +196,7 @@ impl Session {
         self.checked_ids.clear();
         self.unchecked_ids.clear();
 
-        Ok(self.current_dom.as_ref().unwrap().clone())
+        Ok(result)
     }
 
     /// Load from a pre-parsed DOM tree (used after JS actions modify the DOM).
@@ -211,13 +214,14 @@ impl Session {
         );
         spatial.url = url.to_string();
 
+        let result = spatial.clone();
         self.previous_dom = self.current_dom.take();
         self.current_dom = Some(spatial);
         self.form_values.clear();
         self.checked_ids.clear();
         self.unchecked_ids.clear();
 
-        Ok(self.current_dom.as_ref().unwrap().clone())
+        Ok(result)
     }
 
     /// Return the current DOM with form state (typed values, checked state) overlaid.
@@ -296,6 +300,13 @@ impl Session {
             .unwrap_or_default()
     }
 
+    fn resolve_url(&self, relative: &str) -> String {
+        match &self.current_url {
+            Some(base) => base.join(relative).map(|u| u.to_string()).unwrap_or_else(|_| relative.to_string()),
+            None => relative.to_string(),
+        }
+    }
+
     /// Click an element. Links navigate, buttons submit forms, JS behaviors are simulated.
     pub fn click(&mut self, id: u32) -> Result<SpatialDom, FetchError> {
         let (tag, href, is_submit) = {
@@ -303,8 +314,7 @@ impl Session {
                 FetchError::ActionError(format!("Element {} not found", id))
             })?;
             let is_submit = el.tag == "button"
-                || (el.tag == "input"
-                    && el.input_type.as_deref().map(|t| t == "submit").unwrap_or(false));
+                || (el.tag == "input" && el.input_type.as_deref() == Some("submit"));
             (el.tag.clone(), el.href.clone(), is_submit)
         };
 
@@ -323,11 +333,7 @@ impl Session {
                         .cloned()
                         .ok_or_else(|| FetchError::ActionError("No page loaded".to_string()));
                 }
-                let target = if let Some(ref base) = self.current_url {
-                    base.join(trimmed).map(|u| u.to_string()).unwrap_or_else(|_| trimmed.to_string())
-                } else {
-                    trimmed.to_string()
-                };
+                let target = self.resolve_url(trimmed);
                 return self.goto(&target);
             }
         }
@@ -339,11 +345,7 @@ impl Session {
             if let Some(behavior) = behaviors.iter().find(|b| b.trigger_id == id) {
                 match &behavior.action {
                     crate::js::JsAction::Navigate { url } => {
-                        let target = if let Some(ref base) = self.current_url {
-                            base.join(url).map(|u| u.to_string()).unwrap_or_else(|_| url.clone())
-                        } else {
-                            url.clone()
-                        };
+                        let target = self.resolve_url(url);
                         return self.goto(&target);
                     }
                     action => {
@@ -380,8 +382,7 @@ impl Session {
         Ok(())
     }
 
-    /// Check a checkbox or radio button.
-    pub fn check(&mut self, id: u32) -> Result<(), FetchError> {
+    fn require_checkable(&self, id: u32) -> Result<&SpatialElement, FetchError> {
         let el = self.element(id).ok_or_else(|| {
             FetchError::ActionError(format!("Element {} not found", id))
         })?;
@@ -392,6 +393,12 @@ impl Session {
                 "Element {} is not a checkbox or radio", id
             )));
         }
+        Ok(el)
+    }
+
+    /// Check a checkbox or radio button.
+    pub fn check(&mut self, id: u32) -> Result<(), FetchError> {
+        self.require_checkable(id)?;
         self.checked_ids.insert(id);
         self.unchecked_ids.remove(&id);
         Ok(())
@@ -399,16 +406,7 @@ impl Session {
 
     /// Uncheck a checkbox or radio button.
     pub fn uncheck(&mut self, id: u32) -> Result<(), FetchError> {
-        let el = self.element(id).ok_or_else(|| {
-            FetchError::ActionError(format!("Element {} not found", id))
-        })?;
-        let is_checkable = el.input_type.as_deref() == Some("checkbox")
-            || el.input_type.as_deref() == Some("radio");
-        if !is_checkable {
-            return Err(FetchError::ActionError(format!(
-                "Element {} is not a checkbox or radio", id
-            )));
-        }
+        self.require_checkable(id)?;
         self.unchecked_ids.insert(id);
         self.checked_ids.remove(&id);
         Ok(())
@@ -416,24 +414,13 @@ impl Session {
 
     /// Toggle a checkbox or radio button based on its current state.
     pub fn toggle(&mut self, id: u32) -> Result<(), FetchError> {
-        let el = self.element(id).ok_or_else(|| {
-            FetchError::ActionError(format!("Element {} not found", id))
-        })?;
-        let is_checkable = el.input_type.as_deref() == Some("checkbox")
-            || el.input_type.as_deref() == Some("radio");
-        if !is_checkable {
-            return Err(FetchError::ActionError(format!(
-                "Element {} is not a checkbox or radio", id
-            )));
-        }
-        // Determine current effective state: explicit overrides, then HTML default
-        let html_checked = el.checked == Some(true);
+        let el = self.require_checkable(id)?;
         let currently_checked = if self.checked_ids.contains(&id) {
             true
         } else if self.unchecked_ids.contains(&id) {
             false
         } else {
-            html_checked
+            el.checked == Some(true)
         };
         if currently_checked {
             self.unchecked_ids.insert(id);
@@ -614,13 +601,8 @@ impl Session {
             SearchEngine::Google => format!("https://www.google.com/search?{}&num=10", encoded),
         };
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .map_err(|e| FetchError::Network(e.to_string()))?;
-
-        let html = read_response_text_limited(response, self.config.max_response_bytes)?;
+        let parsed_url = Url::parse(&url).map_err(|e| FetchError::InvalidUrl(e.to_string()))?;
+        let html = self.fetch_html_with_retry(&parsed_url)?;
 
         let dom = crate::dom::parse_html(&html);
         match engine {
@@ -640,14 +622,8 @@ impl Session {
         let mut pages = Vec::new();
 
         for result in results.into_iter().take(n) {
-            let page_dom: Option<SpatialDom> = match self.goto(&result.url) {
-                Ok(d) => {
-                    let cloned = d.clone();
-                    Some(cloned)
-                }
-                Err(_) => None,
-            };
-            pages.push(SearchPage { result, dom: page_dom });
+            let dom = self.goto(&result.url).ok();
+            pages.push(SearchPage { result, dom });
         }
 
         Ok(pages)
@@ -773,20 +749,119 @@ impl Session {
             return Err(FetchError::BlockedUrl(target_url.to_string()));
         }
 
-        let response = if method == "post" {
-            self.client.post(target_url.as_str()).form(&form_data).send()
-        } else {
-            self.client.get(target_url.as_str()).query(&form_data).send()
-        }
-        .map_err(|e| FetchError::Network(e.to_string()))?;
-
-        let new_url = response.url().to_string();
-        let html = read_response_text_limited(response, self.config.max_response_bytes)?;
+        let (new_url, html) = self.submit_with_retry(&target_url, &method, &form_data)?;
 
         self.history.push(new_url.clone());
         self.current_url = Some(Url::parse(&new_url).unwrap_or(target_url));
         self.load_html(&html, &new_url)
     }
+
+    fn fetch_html_with_retry(&self, url: &Url) -> Result<String, FetchError> {
+        let cfg = FetchConfig {
+            viewport_width: self.config.viewport_width,
+            viewport_height: self.config.viewport_height,
+            user_agent: self.config.user_agent.clone(),
+            timeout_secs: self.config.timeout_secs,
+            fetch_css: self.config.fetch_css,
+            max_response_bytes: self.config.max_response_bytes,
+            max_css_bytes_total: self.config.max_css_bytes_total,
+            max_css_bytes_per_file: self.config.max_css_bytes_per_file,
+            max_redirects: self.config.max_redirects,
+            allow_private_network: self.config.allow_private_network,
+            allow_non_http: self.config.allow_non_http,
+            blocked_patterns: self.config.blocked_patterns.clone(),
+            retry_attempts: self.config.retry_attempts,
+            retry_delay_ms: self.config.retry_delay_ms,
+            retry_on_blocked: self.config.retry_on_blocked,
+            retry_user_agents: self.config.retry_user_agents.clone(),
+        };
+        fetch_html_with_retry(&self.client, url, &cfg)
+    }
+
+    fn submit_with_retry(
+        &self,
+        target_url: &Url,
+        method: &str,
+        form_data: &[(String, String)],
+    ) -> Result<(String, String), FetchError> {
+        let mut attempts = 0usize;
+        let max_attempts = self.config.retry_attempts + 1;
+
+        while attempts < max_attempts {
+            let ua = self
+                .config
+                .retry_user_agents
+                .get(attempts)
+                .cloned()
+                .unwrap_or_else(|| self.config.user_agent.clone());
+
+            let response = if method == "post" {
+                self.client
+                    .post(target_url.as_str())
+                    .header(USER_AGENT, ua)
+                    .form(form_data)
+                    .send()
+            } else {
+                self.client
+                    .get(target_url.as_str())
+                    .header(USER_AGENT, ua)
+                    .query(form_data)
+                    .send()
+            }
+            .map_err(|e| FetchError::Network(e.to_string()))?;
+
+            let status = response.status();
+            let retry_after = response.headers().get(RETRY_AFTER).and_then(parse_retry_after);
+            if !status.is_success() {
+                if matches!(status.as_u16(), 403 | 408 | 429 | 500 | 502 | 503 | 504)
+                    && attempts + 1 < max_attempts
+                {
+                    attempts += 1;
+                    let delay = retry_delay_ms(self.config.retry_delay_ms, attempts - 1, retry_after);
+                    thread::sleep(Duration::from_millis(delay));
+                    continue;
+                }
+                return Err(FetchError::HttpError(status.as_u16()));
+            }
+
+            let new_url = response.url().to_string();
+            let html = read_response_text_limited(response, self.config.max_response_bytes)?;
+            if self.config.retry_on_blocked {
+                let lower = html.to_lowercase();
+                let blocked = lower.contains("captcha")
+                    || lower.contains("access denied")
+                    || lower.contains("verify you are a human")
+                    || lower.contains("unusual traffic")
+                    || lower.contains("cloudflare")
+                    || lower.contains("perimeterx")
+                    || lower.contains("datadome");
+                if blocked && attempts + 1 < max_attempts {
+                    attempts += 1;
+                    let delay = retry_delay_ms(self.config.retry_delay_ms, attempts - 1, None);
+                    thread::sleep(Duration::from_millis(delay));
+                    continue;
+                }
+            }
+            return Ok((new_url, html));
+        }
+
+        Err(FetchError::Network("Retry attempts exhausted".to_string()))
+    }
+}
+
+fn retry_delay_ms(base_ms: u64, attempt: usize, retry_after_secs: Option<u64>) -> u64 {
+    let base = base_ms.max(50);
+    let exp = 1u64 << attempt.min(6);
+    let mut delay = base.saturating_mul(exp).min(30_000);
+    if let Some(secs) = retry_after_secs {
+        delay = delay.max(secs.saturating_mul(1000));
+    }
+    delay
+}
+
+fn parse_retry_after(value: &reqwest::header::HeaderValue) -> Option<u64> {
+    let s = value.to_str().ok()?;
+    s.trim().parse::<u64>().ok()
 }
 
 /// Search engine to use.

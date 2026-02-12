@@ -1,0 +1,13 @@
+{
+  "date": "2026-02-12",
+  "mode": "parse",
+  "instances": 5,
+  "iteration": 1,
+  "wall_ms": 1030,
+  "peak_working_set_mb_total": 58.64,
+  "peak_working_set_mb_avg": 29.32,
+  "peak_working_set_mb_total_tree": 58.64,
+  "peak_working_set_mb_avg_tree": 29.32,
+  "input_html": "C:\\\\Users\\\\Cade\\\\Projects\\\\agentbrowser\\\\crates\\\\core\\\\tests\\\\corpus\\\\snapshots\\\\wikipedia-rust.html",
+  "url": ""
+}

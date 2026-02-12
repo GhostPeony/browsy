@@ -111,6 +111,10 @@ fn fetch_and_report(url: &str) -> SpatialDom {
                     println!("  CaptchaChallenge: type={:?}, sitekey={:?}, submit={:?}",
                         captcha_type, sitekey, submit_id);
                 }
+                SuggestedAction::RetryGuidance { reason, recommendations, require_human } => {
+                    println!("  RetryGuidance: reason={}, require_human={}, recommendations={:?}",
+                        reason, require_human, recommendations);
+                }
             }
         }
     }
@@ -200,6 +204,7 @@ fn has_action(dom: &SpatialDom, check: fn(&SuggestedAction) -> bool) -> bool {
 // ---------------------------------------------------------------------------
 
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_realworld_hackernews() {
     let dom = fetch_and_report("https://news.ycombinator.com");
@@ -218,6 +223,7 @@ fn test_realworld_hackernews() {
 }
 
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_realworld_wikipedia() {
     let dom = fetch_and_report("https://en.wikipedia.org/wiki/Rust_(programming_language)");
@@ -231,6 +237,7 @@ fn test_realworld_wikipedia() {
 }
 
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_realworld_github() {
     let dom = fetch_and_report("https://github.com/anthropics");
@@ -241,6 +248,7 @@ fn test_realworld_github() {
 }
 
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_realworld_craigslist() {
     let dom = fetch_and_report("https://www.craigslist.org");
@@ -255,6 +263,7 @@ fn test_realworld_craigslist() {
 // ---------------------------------------------------------------------------
 
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_realworld_github_login() {
     let dom = fetch_and_report("https://github.com/login");
@@ -288,6 +297,7 @@ fn test_realworld_github_login() {
 }
 
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_realworld_hn_login() {
     let dom = fetch_and_report("https://news.ycombinator.com/login");
@@ -314,6 +324,7 @@ fn test_realworld_hn_login() {
 // ---------------------------------------------------------------------------
 
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_realworld_duckduckgo() {
     // NOTE: DDG is a JS-heavy SPA. Without JS execution, elements may all be
@@ -330,6 +341,7 @@ fn test_realworld_duckduckgo() {
 }
 
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_realworld_google() {
     // NOTE: Google may serve a JS-heavy version. This test is best-effort.
@@ -347,6 +359,7 @@ fn test_realworld_google() {
 // ---------------------------------------------------------------------------
 
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_realworld_no_false_codes() {
     // Regular content pages should not have verification codes
@@ -360,6 +373,7 @@ fn test_realworld_no_false_codes() {
 }
 
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_realworld_action_ids_valid() {
     // For any suggested action on any real page, all referenced IDs should resolve
@@ -422,6 +436,7 @@ fn test_realworld_action_ids_valid() {
                 if let Some(id) = submit_id { v.push(*id); }
                 v
             }
+            SuggestedAction::RetryGuidance { .. } => Vec::new(),
         };
 
         for id in ids {

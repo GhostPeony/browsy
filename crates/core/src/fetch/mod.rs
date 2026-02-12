@@ -8,9 +8,12 @@ pub use session::{Session, SessionConfig, SearchEngine, SearchResult, SearchPage
 use crate::output::SpatialDom;
 use reqwest::blocking::Client;
 use reqwest::redirect::Policy;
+use reqwest::header::{RETRY_AFTER, USER_AGENT};
 use serde::Serialize;
 use std::io::Read;
 use std::net::{Ipv4Addr, Ipv6Addr};
+use std::thread;
+use std::time::Duration;
 use url::Url;
 
 /// Legacy standalone fetch — use Session for new code.
@@ -38,17 +41,7 @@ pub fn fetch(url: &str, config: &FetchConfig) -> Result<SpatialDom, FetchError> 
         .build()
         .map_err(|e| FetchError::Network(e.to_string()))?;
 
-    let response = client
-        .get(parsed_url.as_str())
-        .send()
-        .map_err(|e| FetchError::Network(e.to_string()))?;
-
-    let status = response.status();
-    if !status.is_success() {
-        return Err(FetchError::HttpError(status.as_u16()));
-    }
-
-    let html = read_response_text_limited(response, config.max_response_bytes)?;
+    let html = fetch_html_with_retry(&client, &parsed_url, config)?;
 
     let dom_tree = crate::dom::parse_html(&html);
     let external_css = if config.fetch_css {
@@ -97,6 +90,10 @@ pub struct FetchConfig {
     pub allow_private_network: bool,
     pub allow_non_http: bool,
     pub blocked_patterns: Vec<String>,
+    pub retry_attempts: usize,
+    pub retry_delay_ms: u64,
+    pub retry_on_blocked: bool,
+    pub retry_user_agents: Vec<String>,
 }
 
 impl Default for FetchConfig {
@@ -114,6 +111,10 @@ impl Default for FetchConfig {
             allow_private_network: false,
             allow_non_http: false,
             blocked_patterns: default_blocked_patterns(),
+            retry_attempts: 2,
+            retry_delay_ms: 250,
+            retry_on_blocked: true,
+            retry_user_agents: default_retry_user_agents(),
         }
     }
 }
@@ -152,6 +153,24 @@ fn default_blocked_patterns() -> Vec<String> {
         "google-analytics.com", "googletagmanager.com", "facebook.net/en_US/fbevents",
         "hotjar.com", "segment.io", "mixpanel.com", "amplitude.com",
         "fonts.googleapis.com", "fonts.gstatic.com", "use.typekit.net",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect()
+}
+
+fn default_retry_user_agents() -> Vec<String> {
+    [
+        // Chrome (Windows)
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        // Chrome (macOS)
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        // Safari (macOS)
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
+        // Firefox (Windows)
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
+        // Edge (Windows)
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
     ]
     .iter()
     .map(|s| s.to_string())
@@ -374,6 +393,96 @@ pub(crate) fn read_response_text_limited(
         return Err(FetchError::ResponseTooLarge(buf.len() as u64, max_bytes));
     }
     Ok(String::from_utf8_lossy(&buf).to_string())
+}
+
+pub(crate) fn fetch_html_with_retry(
+    client: &Client,
+    url: &Url,
+    config: &FetchConfig,
+) -> Result<String, FetchError> {
+    let mut attempts = 0usize;
+    let max_attempts = config.retry_attempts + 1;
+
+    while attempts < max_attempts {
+        let ua = select_retry_user_agent(config, attempts);
+        let response = client
+            .get(url.as_str())
+            .header(USER_AGENT, ua)
+            .send()
+            .map_err(|e| FetchError::Network(e.to_string()))?;
+
+        let status = response.status();
+        let retry_after = response.headers().get(RETRY_AFTER).and_then(parse_retry_after);
+        if !status.is_success() {
+            if should_retry_status(status, attempts, config) {
+                attempts += 1;
+                let delay = retry_delay_ms(config, attempts - 1, retry_after);
+                thread::sleep(Duration::from_millis(delay));
+                continue;
+            }
+            return Err(FetchError::HttpError(status.as_u16()));
+        }
+
+        let html = read_response_text_limited(response, config.max_response_bytes)?;
+        if config.retry_on_blocked && is_blocked_html(status, &html) && attempts + 1 < max_attempts {
+            attempts += 1;
+            let delay = retry_delay_ms(config, attempts - 1, None);
+            thread::sleep(Duration::from_millis(delay));
+            continue;
+        }
+        return Ok(html);
+    }
+
+    Err(FetchError::Network("Retry attempts exhausted".to_string()))
+}
+
+fn select_retry_user_agent(config: &FetchConfig, attempt: usize) -> String {
+    if config.retry_user_agents.is_empty() {
+        return config.user_agent.clone();
+    }
+    let idx = attempt.min(config.retry_user_agents.len() - 1);
+    config.retry_user_agents[idx].clone()
+}
+
+fn should_retry_status(status: reqwest::StatusCode, attempt: usize, config: &FetchConfig) -> bool {
+    if attempt + 1 >= config.retry_attempts + 1 {
+        return false;
+    }
+    matches!(status.as_u16(), 403 | 408 | 429 | 500 | 502 | 503 | 504)
+}
+
+fn retry_delay_ms(config: &FetchConfig, attempt: usize, retry_after_secs: Option<u64>) -> u64 {
+    let base = config.retry_delay_ms.max(50);
+    let exp = 1u64 << attempt.min(6);
+    let mut delay = base.saturating_mul(exp);
+    delay = delay.min(30_000);
+    if let Some(secs) = retry_after_secs {
+        delay = delay.max(secs.saturating_mul(1000));
+    }
+    delay
+}
+
+fn parse_retry_after(value: &reqwest::header::HeaderValue) -> Option<u64> {
+    let s = value.to_str().ok()?;
+    s.trim().parse::<u64>().ok()
+}
+
+fn is_blocked_html(status: reqwest::StatusCode, body: &str) -> bool {
+    if matches!(status.as_u16(), 403 | 429) {
+        return true;
+    }
+    let lower = body.to_lowercase();
+    let hints = [
+        "captcha",
+        "access denied",
+        "verify you are a human",
+        "unusual traffic",
+        "bot detection",
+        "cloudflare",
+        "perimeterx",
+        "datadome",
+    ];
+    hints.iter().any(|h| lower.contains(h))
 }
 
 pub(crate) fn is_url_allowed(url: &Url, allow_private: bool, allow_non_http: bool) -> bool {

@@ -1,0 +1,12 @@
+{
+  "date": "2026-02-12",
+  "mode": "agent-browser",
+  "instances": 1,
+  "iteration": 1,
+  "wall_ms": 6831,
+  "peak_working_set_mb_total": 62.61,
+  "peak_working_set_mb_avg": 62.61,
+  "peak_working_set_mb_total_tree": 0.0,
+  "peak_working_set_mb_avg_tree": 0.0,
+  "url": "https://httpbin.org/forms/post"
+}

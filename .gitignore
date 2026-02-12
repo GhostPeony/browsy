@@ -8,3 +8,8 @@ __pycache__/
 *.pyd
 nul
 docs/site/book/
+.claude/
+benchmark/results/
+node_modules/
+benchmark/playwright/node_modules/
+benchmark/playwright/package-lock.json

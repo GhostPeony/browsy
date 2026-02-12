@@ -59,6 +59,7 @@ mod inner {
             browsy_core::output::SuggestedAction::FillForm { .. } => "FillForm",
             browsy_core::output::SuggestedAction::Download { .. } => "Download",
             browsy_core::output::SuggestedAction::CaptchaChallenge { .. } => "CaptchaChallenge",
+            browsy_core::output::SuggestedAction::RetryGuidance { .. } => "RetryGuidance",
         }).collect();
         let codes = dom.find_codes();
 

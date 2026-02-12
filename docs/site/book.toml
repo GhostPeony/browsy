@@ -8,5 +8,5 @@ description = "Zero-render browser engine for AI agents"
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "ayu"
-git-repository-url = "https://github.com/GhostPeony/agentbrowser"
-edit-url-template = "https://github.com/GhostPeony/agentbrowser/edit/main/docs/site/{path}"
+git-repository-url = "https://github.com/GhostPeony/browsy"
+edit-url-template = "https://github.com/GhostPeony/browsy/edit/main/docs/site/{path}"

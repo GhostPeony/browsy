@@ -1,0 +1,13 @@
+{
+  "date": "2026-02-12",
+  "mode": "fetch",
+  "instances": 1,
+  "iteration": 1,
+  "wall_ms": 1126,
+  "peak_working_set_mb_total": 8.66,
+  "peak_working_set_mb_avg": 8.66,
+  "peak_working_set_mb_total_tree": 8.66,
+  "peak_working_set_mb_avg_tree": 8.66,
+  "input_html": "",
+  "url": "https://httpbin.org/forms/post"
+}

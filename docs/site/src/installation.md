@@ -151,7 +151,7 @@ The MCP server exposes these tools:
 ## Building from source
 
 ```bash
-git clone https://github.com/anthropics/browsy
+git clone https://github.com/GhostPeony/browsy
 cd browsy
 
 # Build everything (library + CLI + MCP server)

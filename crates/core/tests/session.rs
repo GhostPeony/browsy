@@ -5,6 +5,7 @@ use browsy_core::fetch;
 #[cfg(feature = "fetch")]
 use browsy_core::fetch::Session;
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_fetch_real_page() {
     let config = fetch::FetchConfig {
@@ -151,6 +152,7 @@ fn test_session_delta() {
 }
 
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_session_real_navigation() {
     let mut session = Session::with_config(fetch::SessionConfig {
@@ -258,6 +260,7 @@ fn test_search_result_parsing() {
 }
 
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_search_live() {
     let mut session = Session::with_config(fetch::SessionConfig {
@@ -338,6 +341,7 @@ fn test_google_result_parsing() {
 }
 
 #[test]
+#[ignore]
 #[cfg(feature = "fetch")]
 fn test_google_search_live() {
     let mut session = Session::with_config(fetch::SessionConfig {

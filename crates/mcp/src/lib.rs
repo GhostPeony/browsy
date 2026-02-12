@@ -1,3 +1,5 @@
+//! MCP server for browsy — exposes browse/click/type/search tools over stdio.
+
 use std::sync::Mutex;
 
 use browsy_core::fetch::{FetchError, Session, SearchEngine};
@@ -108,21 +110,48 @@ pub fn format_page(dom: &output::SpatialDom, format: Option<&str>) -> String {
     }
 }
 
-fn apply_scope(mut dom: output::SpatialDom, scope: Option<&str>) -> output::SpatialDom {
+fn strip_hidden(mut dom: output::SpatialDom) -> output::SpatialDom {
+    dom.els.retain(|e| e.hidden != Some(true));
+    dom.rebuild_index();
+    dom
+}
+
+fn apply_scope(dom: output::SpatialDom, scope: Option<&str>) -> output::SpatialDom {
     match scope.unwrap_or("all") {
-        "visible" => {
-            dom.els = dom.els.into_iter().filter(|e| e.hidden != Some(true)).collect();
-            dom.rebuild_index();
-            dom
-        }
+        "visible" => strip_hidden(dom),
         "above_fold" => dom.filter_above_fold(),
-        "visible_above_fold" => {
-            dom.els = dom.els.into_iter().filter(|e| e.hidden != Some(true)).collect();
-            dom.rebuild_index();
-            dom.filter_above_fold()
-        }
+        "visible_above_fold" => strip_hidden(dom).filter_above_fold(),
         _ => dom,
     }
+}
+
+fn captcha_warning(dom: &output::SpatialDom) -> Option<String> {
+    if dom.page_type != output::PageType::Captcha {
+        return None;
+    }
+    let detail = match dom.captcha {
+        Some(ref c) => format!(" ({:?})", c.captcha_type),
+        None => String::new(),
+    };
+    Some(format!("\u{26a0} CAPTCHA detected{detail} \u{2014} this page requires human verification to proceed.\n"))
+}
+
+fn blocked_warning(dom: &output::SpatialDom) -> Option<String> {
+    let info = dom.blocked.as_ref()?;
+    let mut text = format!("\u{26a0} Blocked detected ({})\n", info.reason);
+    if !info.signals.is_empty() {
+        text.push_str(&format!("signals: {}\n", info.signals.join(", ")));
+    }
+    if !info.recommendations.is_empty() {
+        text.push_str("recommendations:\n");
+        for rec in &info.recommendations {
+            text.push_str(&format!("  - {}\n", rec));
+        }
+    }
+    if info.require_human {
+        text.push_str("requires_human: true\n");
+    }
+    Some(text)
 }
 
 fn err(msg: impl Into<String>) -> McpError {
@@ -162,17 +191,8 @@ impl BrowsyServer {
     ) -> Result<CallToolResult, McpError> {
         let mut session = self.session.lock().unwrap();
         let dom = session.goto(&params.url).map_err(map_fetch_error)?;
-        let mut text = String::new();
-
-        // Surface CAPTCHA warning at top of output when detected
-        if dom.page_type == output::PageType::Captcha {
-            text.push_str("⚠ CAPTCHA detected");
-            if let Some(ref captcha) = dom.captcha {
-                text.push_str(&format!(" ({:?})", captcha.captcha_type));
-            }
-            text.push_str(" — this page requires human verification to proceed.\n");
-        }
-
+        let mut text = blocked_warning(&dom).unwrap_or_default();
+        text.push_str(&captcha_warning(&dom).unwrap_or_default());
         let scoped = apply_scope(dom, params.scope.as_deref());
         text.push_str(&format_page(&scoped, params.format.as_deref()));
         Ok(CallToolResult::success(vec![Content::text(text)]))
@@ -185,16 +205,8 @@ impl BrowsyServer {
     ) -> Result<CallToolResult, McpError> {
         let mut session = self.session.lock().unwrap();
         let dom = session.click(params.id).map_err(map_fetch_error)?;
-        let mut text = String::new();
-
-        if dom.page_type == output::PageType::Captcha {
-            text.push_str("⚠ CAPTCHA detected");
-            if let Some(ref captcha) = dom.captcha {
-                text.push_str(&format!(" ({:?})", captcha.captcha_type));
-            }
-            text.push_str(" — this page requires human verification to proceed.\n");
-        }
-
+        let mut text = blocked_warning(&dom).unwrap_or_default();
+        text.push_str(&captcha_warning(&dom).unwrap_or_default());
         text.push_str(&format_page(&dom, None));
         Ok(CallToolResult::success(vec![Content::text(text)]))
     }
@@ -314,16 +326,17 @@ impl BrowsyServer {
         Parameters(params): Parameters<FindParams>,
     ) -> Result<CallToolResult, McpError> {
         let session = self.session.lock().unwrap();
-        let mut results = Vec::new();
+        let mut results: Vec<browsy_core::output::SpatialElement> = params
+            .text
+            .as_deref()
+            .map(|t| session.find_by_text(t).into_iter().cloned().collect())
+            .unwrap_or_default();
 
-        if let Some(ref text) = params.text {
-            for el in session.find_by_text(text) {
-                results.push(el.clone());
-            }
-        }
         if let Some(ref role) = params.role {
+            let mut dedupe: std::collections::HashSet<u32> =
+                results.iter().map(|r| r.id).collect();
             for el in session.find_by_role(role) {
-                if !results.iter().any(|r: &browsy_core::output::SpatialElement| r.id == el.id) {
+                if dedupe.insert(el.id) {
                     results.push(el.clone());
                 }
             }
@@ -364,6 +377,12 @@ impl BrowsyServer {
             info.as_object_mut().unwrap().insert(
                 "captcha".to_string(),
                 serde_json::to_value(captcha).unwrap_or_default(),
+            );
+        }
+        if let Some(ref blocked) = dom.blocked {
+            info.as_object_mut().unwrap().insert(
+                "blocked".to_string(),
+                serde_json::to_value(blocked).unwrap_or_default(),
             );
         }
         let text = serde_json::to_string_pretty(&info).unwrap_or_default();

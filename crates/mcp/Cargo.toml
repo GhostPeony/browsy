@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "MCP server for browsy — zero-render browser engine for AI agents"
-repository = "https://github.com/anthropics/browsy"
+repository = "https://github.com/GhostPeony/browsy"
+homepage = "https://browsy.dev"
 keywords = ["mcp", "browser", "ai", "agent"]
 categories = ["web-programming", "development-tools"]
 

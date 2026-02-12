@@ -1,3 +1,5 @@
+//! Python bindings for browsy via PyO3.
+
 use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
 

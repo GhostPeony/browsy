@@ -17,6 +17,8 @@ pub struct SpatialDom {
     pub page_type: PageType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub captcha: Option<CaptchaInfo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocked: Option<BlockedInfo>,
     pub els: Vec<SpatialElement>,
     /// O(1) lookup: element ID → index in `els`.
     #[serde(skip)]
@@ -31,6 +33,17 @@ pub struct CaptchaInfo {
     /// Site key for the CAPTCHA service (from data-sitekey attribute).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sitekey: Option<String>,
+}
+
+/// Blocked / anti-bot guidance detected on the page.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockedInfo {
+    pub reason: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub signals: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recommendations: Vec<String>,
+    pub require_human: bool,
 }
 
 /// Known CAPTCHA types.
@@ -87,7 +100,7 @@ pub struct SpatialElement {
     /// HTML name attribute (for form fields: input, textarea, select)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    /// Associated label text (from <label for="id">)
+    /// Associated label text (from `<label for="id">`)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
     /// Alert type: "alert", "status", "error", "success", "warning"
@@ -172,6 +185,11 @@ pub enum SuggestedAction {
         #[serde(skip_serializing_if = "Option::is_none")]
         submit_id: Option<u32>,
     },
+    RetryGuidance {
+        reason: String,
+        recommendations: Vec<String>,
+        require_human: bool,
+    },
     Download {
         items: Vec<DownloadItem>,
     },
@@ -247,6 +265,7 @@ impl SpatialDom {
             suggested_actions: self.suggested_actions.clone(),
             page_type: self.page_type.clone(),
             captcha: self.captcha.clone(),
+            blocked: self.blocked.clone(),
             els,
             id_index,
         }
@@ -300,11 +319,13 @@ pub fn generate_spatial_dom(
         suggested_actions: Vec::new(),
         page_type: PageType::Other,
         captcha,
+        blocked: None,
         els,
         id_index,
     };
 
     // Detect page type and suggested actions
+    dom.blocked = detect_blocked_info(&dom);
     dom.page_type = detect_page_type(&dom);
     dom.suggested_actions = detect_suggested_actions(&dom);
 
@@ -444,17 +465,10 @@ fn collect_elements(
         // skip the wrapper and let the children carry the text.
         let has_interactive = has_interactive_descendants(node);
         let is_wrapper = WRAPPER_TAGS.contains(&tag);
+        let should_dedup = !is_interactive && has_interactive
+            && (is_wrapper || is_text);
 
-        if is_wrapper && !is_interactive && has_interactive {
-            let own_text = collect_own_text(node);
-            if own_text.is_empty() || is_trivial_text(&own_text) {
-                for child in &node.children {
-                    collect_elements(child, els, id_counter, is_hidden, label_map);
-                }
-                return;
-            }
-            emit_element(node, els, id_counter, Some(own_text), is_hidden, label_map);
-        } else if is_text && !is_interactive && has_interactive {
+        if should_dedup {
             let own_text = collect_own_text(node);
             if own_text.is_empty() || is_trivial_text(&own_text) {
                 for child in &node.children {
@@ -1011,22 +1025,21 @@ fn detect_alert_type(node: &LayoutNode) -> Option<String> {
     if let Some(classes) = node.attributes.get("class") {
         let lower = classes.to_lowercase();
         let class_list: Vec<&str> = lower.split_whitespace().collect();
+        let is_compound = |cls: &str| {
+            cls.contains('-') || cls.contains('_')
+                || cls.starts_with("alert") || cls.starts_with("msg")
+        };
+
         for cls in &class_list {
             // Require compound patterns: "alert-error", "msg-error", "form-error", etc.
             // A bare "error" class is too ambiguous.
-            let is_error = (cls.contains("error") || cls.contains("danger"))
-                && (cls.contains('-') || cls.contains('_') || cls.starts_with("alert") || cls.starts_with("msg"));
-            if is_error {
+            if (cls.contains("error") || cls.contains("danger")) && is_compound(cls) {
                 return Some("error".to_string());
             }
-            let is_success = cls.contains("success")
-                && (cls.contains('-') || cls.contains('_') || cls.starts_with("alert") || cls.starts_with("msg"));
-            if is_success {
+            if cls.contains("success") && is_compound(cls) {
                 return Some("success".to_string());
             }
-            let is_warning = cls.contains("warning")
-                && (cls.contains('-') || cls.contains('_') || cls.starts_with("alert") || cls.starts_with("msg"));
-            if is_warning {
+            if cls.contains("warning") && is_compound(cls) {
                 return Some("warning".to_string());
             }
             // "alert" as a class by itself is typically intentional (Bootstrap, etc.)
@@ -1138,6 +1151,7 @@ pub enum PageType {
     TwoFactorAuth,
     OAuthConsent,
     Captcha,
+    Blocked,
     Search,
     SearchResults,
     Inbox,
@@ -1306,6 +1320,112 @@ fn is_search_input(e: &SpatialElement) -> bool {
         || e.label.as_ref().map(|l| l.to_lowercase().contains("search")).unwrap_or(false)
 }
 
+/// Find the ID of a visible email input field.
+fn find_email_input_id(dom: &SpatialDom) -> Option<u32> {
+    dom.els.iter().find(|e| {
+        e.hidden != Some(true) && (
+            e.input_type.as_deref() == Some("email")
+            || e.name.as_ref().map(|n| {
+                let lower = n.to_lowercase();
+                lower == "email" || lower == "e-mail"
+            }).unwrap_or(false)
+        )
+    }).map(|e| e.id)
+}
+
+fn detect_blocked_info(dom: &SpatialDom) -> Option<BlockedInfo> {
+    let mut signals = Vec::new();
+
+    let title_lower = dom.title.to_lowercase();
+    let mut text = String::new();
+    text.push_str(&title_lower);
+    for e in &dom.els {
+        if let Some(t) = &e.text {
+            text.push(' ');
+            text.push_str(&t.to_lowercase());
+        }
+        if let Some(l) = &e.label {
+            text.push(' ');
+            text.push_str(&l.to_lowercase());
+        }
+        if let Some(p) = &e.ph {
+            text.push(' ');
+            text.push_str(&p.to_lowercase());
+        }
+        if let Some(a) = &e.alert_type {
+            text.push(' ');
+            text.push_str(&a.to_lowercase());
+        }
+        if text.len() > 32_000 {
+            break;
+        }
+    }
+
+    let signal_terms = [
+        ("captcha", "captcha"),
+        ("verify you are human", "human_check"),
+        ("verify you're human", "human_check"),
+        ("unusual traffic", "unusual_traffic"),
+        ("access denied", "access_denied"),
+        ("forbidden", "forbidden"),
+        ("blocked", "blocked"),
+        ("bot detection", "bot_detection"),
+        ("cloudflare", "cloudflare"),
+        ("turnstile", "turnstile"),
+        ("perimeterx", "perimeterx"),
+        ("datadome", "datadome"),
+        ("akamai", "akamai"),
+        ("incapsula", "incapsula"),
+        ("rate limit", "rate_limit"),
+        ("too many requests", "rate_limit"),
+    ];
+
+    for (needle, label) in signal_terms.iter() {
+        if text.contains(needle) && !signals.contains(&label.to_string()) {
+            signals.push(label.to_string());
+        }
+    }
+
+    if dom.captcha.is_some() && !signals.contains(&"captcha_service".to_string()) {
+        signals.push("captcha_service".to_string());
+    }
+
+    if signals.is_empty() {
+        return None;
+    }
+
+    let mut recommendations = Vec::new();
+    if signals.iter().any(|s| s == "rate_limit") {
+        recommendations.push("Back off and retry with exponential delay".to_string());
+        recommendations.push("Reduce request rate for this host".to_string());
+    }
+    if signals.iter().any(|s| s == "captcha" || s == "captcha_service" || s == "turnstile" || s == "cloudflare") {
+        recommendations.push("Ask a human to solve the challenge".to_string());
+    }
+    recommendations.push("Retry with a different user agent".to_string());
+    recommendations.push("Try fetching only visible or above-fold content".to_string());
+    recommendations.push("If authenticated, ensure cookies/session are set".to_string());
+
+    let require_human = signals.iter().any(|s| {
+        s == "captcha" || s == "captcha_service" || s == "turnstile" || s == "cloudflare"
+    });
+
+    let reason = if require_human {
+        "captcha_or_challenge".to_string()
+    } else if signals.iter().any(|s| s == "rate_limit") {
+        "rate_limited".to_string()
+    } else {
+        "blocked".to_string()
+    };
+
+    Some(BlockedInfo {
+        reason,
+        signals,
+        recommendations,
+        require_human,
+    })
+}
+
 // --- Page type detection ---
 
 fn detect_page_type(dom: &SpatialDom) -> PageType {
@@ -1350,6 +1470,11 @@ fn detect_page_type(dom: &SpatialDom) -> PageType {
     let has_captcha_service = dom.captcha.is_some();
     if has_captcha_title || has_captcha_heading || has_captcha_service {
         return PageType::Captcha;
+    }
+
+    // Blocked / anti-bot (non-captcha)
+    if dom.blocked.is_some() {
+        return PageType::Blocked;
     }
 
     // Login
@@ -1435,10 +1560,10 @@ fn detect_page_type(dom: &SpatialDom) -> PageType {
 
     // SearchResults — must come before List, since search result pages have many links.
     // Multiple signals: title/heading keywords, URL query params, search input presence.
-    let has_search_input = dom.els.iter().any(|e| {
+    let has_visible_search_input = dom.els.iter().any(|e| {
         e.hidden != Some(true) && is_search_input(e)
     });
-    let has_any_search_input = has_search_input || dom.els.iter().any(|e| is_search_input(e));
+    let has_any_search_input = dom.els.iter().any(|e| is_search_input(e));
     let search_results_keywords = &["search results", "results for", "search:", "found"];
     let has_search_results_context = title_has(search_results_keywords)
         || heading_has(search_results_keywords)
@@ -1462,7 +1587,7 @@ fn detect_page_type(dom: &SpatialDom) -> PageType {
     }
 
     // Search — a search input without enough links to be a results page or list
-    if has_search_input {
+    if has_visible_search_input {
         return PageType::Search;
     }
 
@@ -1499,6 +1624,10 @@ fn detect_page_type(dom: &SpatialDom) -> PageType {
 
 fn detect_suggested_actions(dom: &SpatialDom) -> Vec<SuggestedAction> {
     let mut actions = Vec::new();
+
+    if let Some(a) = detect_blocked_action(dom) {
+        actions.push(a);
+    }
 
     // Register vs Login: prefer Register when registration context is present.
     // Both detect password fields, but Register also checks for confirm-password or
@@ -1540,6 +1669,15 @@ fn detect_suggested_actions(dom: &SpatialDom) -> Vec<SuggestedAction> {
     }
 
     actions
+}
+
+fn detect_blocked_action(dom: &SpatialDom) -> Option<SuggestedAction> {
+    let info = dom.blocked.as_ref()?;
+    Some(SuggestedAction::RetryGuidance {
+        reason: info.reason.clone(),
+        recommendations: info.recommendations.clone(),
+        require_human: info.require_human,
+    })
 }
 
 fn detect_login_action(dom: &SpatialDom) -> Option<SuggestedAction> {
@@ -1700,29 +1838,22 @@ fn detect_consent_action(dom: &SpatialDom) -> Option<SuggestedAction> {
     let approve_words = ["allow", "authorize", "accept", "approve", "grant"];
     let deny_words = ["deny", "cancel", "decline", "reject"];
 
-    let approve_ids: Vec<u32> = dom.els.iter()
-        .filter(|e| e.hidden != Some(true))
-        .filter(|e| e.tag == "button" || e.role.as_deref() == Some("button"))
-        .filter(|e| {
-            e.text.as_ref().map(|t| {
-                let lower = t.to_lowercase();
-                approve_words.iter().any(|w| lower.contains(w))
-            }).unwrap_or(false)
-        })
-        .map(|e| e.id)
-        .collect();
+    let find_button_ids = |words: &[&str]| -> Vec<u32> {
+        dom.els.iter()
+            .filter(|e| e.hidden != Some(true))
+            .filter(|e| e.tag == "button" || e.role.as_deref() == Some("button"))
+            .filter(|e| {
+                e.text.as_ref().map(|t| {
+                    let lower = t.to_lowercase();
+                    words.iter().any(|w| lower.contains(w))
+                }).unwrap_or(false)
+            })
+            .map(|e| e.id)
+            .collect()
+    };
 
-    let deny_ids: Vec<u32> = dom.els.iter()
-        .filter(|e| e.hidden != Some(true))
-        .filter(|e| e.tag == "button" || e.role.as_deref() == Some("button"))
-        .filter(|e| {
-            e.text.as_ref().map(|t| {
-                let lower = t.to_lowercase();
-                deny_words.iter().any(|w| lower.contains(w))
-            }).unwrap_or(false)
-        })
-        .map(|e| e.id)
-        .collect();
+    let approve_ids = find_button_ids(&approve_words);
+    let deny_ids = find_button_ids(&deny_words);
 
     if approve_ids.is_empty() && deny_ids.is_empty() {
         return None;
@@ -1808,19 +1939,17 @@ fn detect_cookie_consent_action(dom: &SpatialDom) -> Option<SuggestedAction> {
         .filter(|e| e.tag == "button" || e.role.as_deref() == Some("button"))
         .collect();
 
-    let accept_id = buttons.iter().find(|e| {
-        e.text.as_ref().map(|t| {
-            let lower = t.to_lowercase().trim().to_string();
-            accept_words.iter().any(|w| lower == *w || lower.contains(w))
-        }).unwrap_or(false)
-    }).map(|e| e.id)?;
+    let find_button_with_words = |words: &[&str]| -> Option<u32> {
+        buttons.iter().find(|e| {
+            e.text.as_ref().map(|t| {
+                let lower = t.to_lowercase().trim().to_string();
+                words.iter().any(|w| lower == *w || lower.contains(w))
+            }).unwrap_or(false)
+        }).map(|e| e.id)
+    };
 
-    let reject_id = buttons.iter().find(|e| {
-        e.text.as_ref().map(|t| {
-            let lower = t.to_lowercase().trim().to_string();
-            reject_words.iter().any(|w| lower == *w || lower.contains(w))
-        }).unwrap_or(false)
-    }).map(|e| e.id);
+    let accept_id = find_button_with_words(&accept_words)?;
+    let reject_id = find_button_with_words(&reject_words);
 
     Some(SuggestedAction::CookieConsent { accept_id, reject_id })
 }
@@ -1898,16 +2027,7 @@ fn detect_register_action(dom: &SpatialDom) -> Option<SuggestedAction> {
         return None;
     }
 
-    // Find email field
-    let email_id = dom.els.iter().find(|e| {
-        e.hidden != Some(true) && (
-            e.input_type.as_deref() == Some("email")
-            || e.name.as_ref().map(|n| {
-                let lower = n.to_lowercase();
-                lower == "email" || lower == "e-mail"
-            }).unwrap_or(false)
-        )
-    }).map(|e| e.id);
+    let email_id = find_email_input_id(dom);
 
     // Find username field (text input with name suggesting username)
     let username_id = dom.els.iter().find(|e| {
@@ -1973,16 +2093,7 @@ fn detect_contact_action(dom: &SpatialDom) -> Option<SuggestedAction> {
         return None;
     }
 
-    // Find email field
-    let email_id = dom.els.iter().find(|e| {
-        e.hidden != Some(true) && (
-            e.input_type.as_deref() == Some("email")
-            || e.name.as_ref().map(|n| {
-                let lower = n.to_lowercase();
-                lower == "email" || lower == "e-mail"
-            }).unwrap_or(false)
-        )
-    }).map(|e| e.id);
+    let email_id = find_email_input_id(dom);
 
     // Find name field
     let name_id = dom.els.iter().find(|e| {
@@ -2061,9 +2172,6 @@ fn detect_fill_form_action(dom: &SpatialDom, existing_actions: &[SuggestedAction
 /// Detect download links/buttons on the page.
 /// Looks for links with download-related text or file extension hrefs.
 fn detect_download_action(dom: &SpatialDom) -> Option<SuggestedAction> {
-    let download_text_keywords = [
-        "download",
-    ];
     let file_extensions = [
         ".zip", ".tar.gz", ".dmg", ".exe", ".msi", ".deb", ".rpm",
         ".pkg", ".appimage", ".pdf", ".csv", ".xlsx",
@@ -2083,9 +2191,7 @@ fn detect_download_action(dom: &SpatialDom) -> Option<SuggestedAction> {
         // or is a short button text like "Download" / "Download now"
         let text_match = el.text.as_ref().map(|t| {
             let lower = t.to_lowercase().trim().to_string();
-            download_text_keywords.iter().any(|kw| {
-                lower.starts_with(kw) && (lower.len() < 40 || lower.contains('.'))
-            })
+            lower.starts_with("download") && (lower.len() < 40 || lower.contains('.'))
         }).unwrap_or(false);
 
         let href_match = el.href.as_ref().map(|h| {
@@ -2141,22 +2247,20 @@ fn detect_captcha_challenge_action(dom: &SpatialDom) -> Option<SuggestedAction> 
         return None;
     };
 
-    // Find the submit button
-    let submit_id = dom.els.iter()
+    // Find the submit button: prefer one with action text, fall back to any visible button
+    let visible_buttons: Vec<&SpatialElement> = dom.els.iter().filter(|e| {
+        e.hidden != Some(true)
+            && (e.tag == "button" || (e.tag == "input" && e.input_type.as_deref() == Some("submit")))
+    }).collect();
+    let submit_id = visible_buttons.iter()
         .find(|e| {
-            e.hidden != Some(true)
-                && (e.tag == "button" || (e.tag == "input" && e.input_type.as_deref() == Some("submit")))
-                && e.text.as_ref().map(|t| {
-                    let lower = t.to_lowercase();
-                    lower.contains("verify") || lower.contains("submit") || lower.contains("continue")
-                        || lower.contains("proceed")
-                }).unwrap_or(false)
+            e.text.as_ref().map(|t| {
+                let lower = t.to_lowercase();
+                lower.contains("verify") || lower.contains("submit") || lower.contains("continue")
+                    || lower.contains("proceed")
+            }).unwrap_or(false)
         })
-        // Fallback: any visible submit button
-        .or_else(|| dom.els.iter().find(|e| {
-            e.hidden != Some(true)
-                && (e.tag == "button" || (e.tag == "input" && e.input_type.as_deref() == Some("submit")))
-        }))
+        .or_else(|| visible_buttons.first())
         .map(|e| e.id);
 
     Some(SuggestedAction::CaptchaChallenge {
@@ -2190,13 +2294,13 @@ fn scan_captcha_recursive(
 ) {
     let tag = node.tag.as_str();
 
-    // Check script src for CAPTCHA service URLs
-    if tag == "script" {
+    // Check script/iframe src for CAPTCHA service URLs
+    if matches!(tag, "script" | "iframe") {
         if let Some(src) = node.attributes.get("src") {
             let src_lower = src.to_lowercase();
             if src_lower.contains("recaptcha") || src_lower.contains("google.com/recaptcha") {
                 *captcha_type = Some(CaptchaType::ReCaptcha);
-            } else if src_lower.contains("hcaptcha.com") {
+            } else if src_lower.contains("hcaptcha.com") || src_lower.contains("newassets.hcaptcha.com") {
                 *captcha_type = Some(CaptchaType::HCaptcha);
             } else if src_lower.contains("challenges.cloudflare.com/turnstile") {
                 *captcha_type = Some(CaptchaType::Turnstile);
@@ -2204,19 +2308,7 @@ fn scan_captcha_recursive(
         }
     }
 
-    // Check iframe src for CAPTCHA embeds
-    if tag == "iframe" {
-        if let Some(src) = node.attributes.get("src") {
-            let src_lower = src.to_lowercase();
-            if src_lower.contains("recaptcha") || src_lower.contains("google.com/recaptcha") {
-                *captcha_type = Some(CaptchaType::ReCaptcha);
-            } else if src_lower.contains("hcaptcha.com") || src_lower.contains("newassets.hcaptcha.com") {
-                *captcha_type = Some(CaptchaType::HCaptcha);
-            }
-        }
-    }
-
-    // Check div class for CAPTCHA containers
+    // Check div class for CAPTCHA containers and Cloudflare challenge IDs
     if tag == "div" {
         if let Some(class) = node.attributes.get("class") {
             let class_lower = class.to_lowercase();
@@ -2228,26 +2320,20 @@ fn scan_captcha_recursive(
                 *captcha_type = Some(CaptchaType::Turnstile);
             }
         }
+        if let Some(id) = node.attributes.get("id") {
+            let id_lower = id.to_lowercase();
+            if (id_lower.contains("challenge-running") || id_lower.contains("cf-challenge"))
+                && captcha_type.is_none()
+            {
+                *captcha_type = Some(CaptchaType::CloudflareChallenge);
+            }
+        }
     }
 
     // Check for data-sitekey attribute (all major CAPTCHA services use this)
     if let Some(key) = node.attributes.get("data-sitekey") {
         if !key.is_empty() {
             *sitekey = Some(key.clone());
-        }
-    }
-
-    // Cloudflare JS challenge detection: specific meta/body patterns
-    // Cloudflare challenge pages have <title>Just a moment...</title> (handled in detect_page_type)
-    // but also <div id="challenge-running"> or <div id="cf-challenge-running">
-    if tag == "div" {
-        if let Some(id) = node.attributes.get("id") {
-            let id_lower = id.to_lowercase();
-            if id_lower.contains("challenge-running") || id_lower.contains("cf-challenge") {
-                if captcha_type.is_none() {
-                    *captcha_type = Some(CaptchaType::CloudflareChallenge);
-                }
-            }
         }
     }
 

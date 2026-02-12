@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "Zero-render browser engine for AI agents — browsy.dev"
+repository = "https://github.com/GhostPeony/browsy"
+homepage = "https://browsy.dev"
+keywords = ["browser", "html", "ai", "agent", "spatial-dom"]
+categories = ["web-programming", "parsing"]
 
 [dependencies]
 html5ever = "0.36"

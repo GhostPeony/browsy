@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "Python bindings for browsy — zero-render browser engine for AI agents"
+repository = "https://github.com/GhostPeony/browsy"
+keywords = ["browser", "python", "ai", "agent"]
+categories = ["web-programming", "api-bindings"]
 
 [lib]
 name = "browsy_python"
