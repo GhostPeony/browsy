@@ -2,10 +2,15 @@
 Cargo.lock
 *.session
 .env
+.env.*
 crates/core/tests/corpus/results.json
 crates/core/tests/corpus/baseline.json
 __pycache__/
 *.pyd
+*.pem
+*.key
+*.p12
+*.pfx
 nul
 docs/site/book/
 .claude/
@@ -13,3 +18,10 @@ benchmark/results/
 node_modules/
 benchmark/playwright/node_modules/
 benchmark/playwright/package-lock.json
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*.log

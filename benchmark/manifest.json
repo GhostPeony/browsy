@@ -3,7 +3,7 @@
   "iterations": 3,
   "parallel_instances": [1, 5, 10],
   "browsy": {
-    "parse_input_html": "C:\\Users\\Cade\\Projects\\agentbrowser\\crates\\core\\tests\\corpus\\snapshots\\wikipedia-rust.html",
+    "parse_input_html": "crates/core/tests/corpus/snapshots/wikipedia-rust.html",
     "fetch_url": "https://httpbin.org/forms/post"
   },
   "competitors": {
