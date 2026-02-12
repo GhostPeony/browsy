@@ -28,12 +28,10 @@ async fn health_returns_ok() {
 #[tokio::test]
 async fn browse_missing_url_returns_422() {
     let server = test_server();
-    // POST with empty JSON body (missing required `url` field) should fail deserialization
     let res = server
         .post("/api/browse")
         .json(&json!({}))
         .await;
-    // Axum returns 422 Unprocessable Entity when JSON deserialization fails
     res.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
 }
 
