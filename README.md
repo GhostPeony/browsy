@@ -431,6 +431,7 @@ for r in &results {
 cargo install browsy
 browsy fetch https://example.com
 browsy fetch https://example.com --json
+browsy fetch https://example.com --json-meta  # include domain_memory metadata
 browsy fetch https://example.com --viewport 375x812  # mobile
 browsy parse index.html
 

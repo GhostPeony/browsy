@@ -21,6 +21,10 @@ enum Commands {
         #[arg(long)]
         json: bool,
 
+        /// Output JSON with metadata (domain memory, warnings)
+        #[arg(long)]
+        json_meta: bool,
+
         /// Viewport size as WxH (default: 1920x1080)
         #[arg(long, default_value = "1920x1080")]
         viewport: String,
@@ -85,6 +89,7 @@ fn main() {
         Commands::Fetch {
             url,
             json,
+            json_meta,
             viewport,
             no_css,
             visible_only,
@@ -92,7 +97,7 @@ fn main() {
             allow_private_network,
         } => {
             let (vw, vh) = parse_viewport(&viewport);
-            let config = fetch::FetchConfig {
+            let config = fetch::SessionConfig {
                 viewport_width: vw,
                 viewport_height: vh,
                 fetch_css: !no_css,
@@ -100,10 +105,18 @@ fn main() {
                 ..Default::default()
             };
 
-            match fetch::fetch(&url, &config) {
+            let mut session = match fetch::Session::with_config(config) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            match session.goto(&url) {
                 Ok(dom) => {
                     let scoped = apply_scope(dom, visible_only, above_fold);
-                    print_dom(&scoped, json)
+                    let domain_memory = session.domain_memory_for_current();
+                    print_dom(&scoped, json, json_meta, domain_memory);
                 }
                 Err(e) => {
                     eprintln!("Error: {}", e);
@@ -127,7 +140,7 @@ fn main() {
             };
 
             let dom = browsy_core::parse(&html, vw, vh);
-            print_dom(&dom, json);
+            print_dom(&dom, json, false, None);
         }
         #[cfg(feature = "serve")]
         Commands::Serve { port, allow_private_network } => {
@@ -164,8 +177,14 @@ fn apply_scope(mut dom: output::SpatialDom, visible_only: bool, above_fold: bool
     dom
 }
 
-fn print_dom(dom: &output::SpatialDom, as_json: bool) {
-    if as_json {
+fn print_dom(dom: &output::SpatialDom, as_json: bool, as_json_meta: bool, domain_memory: Option<fetch::DomainMemory>) {
+    if as_json_meta {
+        let wrapped = serde_json::json!({
+            "dom": dom,
+            "domain_memory": domain_memory,
+        });
+        println!("{}", serde_json::to_string_pretty(&wrapped).unwrap());
+    } else if as_json {
         println!("{}", serde_json::to_string_pretty(dom).unwrap());
     } else {
         if let Some(ref blocked) = dom.blocked {
@@ -199,6 +218,17 @@ fn print_dom(dom: &output::SpatialDom, as_json: bool) {
         }
         if !dom.url.is_empty() {
             println!("url: {}", dom.url);
+        }
+        if let Some(ref memory) = domain_memory {
+            println!(
+                "domain_memory: ok={} blocked={} error={} last_outcome={} last_reason={} last_seen_unix={}",
+                memory.ok_count,
+                memory.blocked_count,
+                memory.error_count,
+                memory.last_outcome,
+                memory.last_reason.as_deref().unwrap_or("-"),
+                memory.last_seen_unix
+            );
         }
         println!("vp: {}x{}", dom.vp[0] as i32, dom.vp[1] as i32);
         println!("els: {}", dom.els.len());

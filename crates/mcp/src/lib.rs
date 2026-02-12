@@ -381,6 +381,12 @@ impl BrowsyServer {
             }).collect::<Vec<_>>(),
             "pagination": dom.pagination(),
         });
+        if let Some(domain_memory) = session.domain_memory_for_current() {
+            info.as_object_mut().unwrap().insert(
+                "domain_memory".to_string(),
+                serde_json::to_value(domain_memory).unwrap_or_default(),
+            );
+        }
         if let Some(ref captcha) = dom.captcha {
             info.as_object_mut().unwrap().insert(
                 "captcha".to_string(),

@@ -1503,7 +1503,7 @@ fn detect_page_type(dom: &SpatialDom) -> PageType {
     }
 
     // OAuthConsent
-    let oauth_keywords = &["authorize", "allow access", "grant permission", "oauth", "consent"];
+    let oauth_keywords = &["authorize", "allow access", "grant permission", "oauth"];
     if title_has(oauth_keywords) || heading_has(oauth_keywords) {
         return PageType::OAuthConsent;
     }
@@ -1591,18 +1591,28 @@ fn detect_page_type(dom: &SpatialDom) -> PageType {
         return PageType::Search;
     }
 
-    // Form — count visible data-entry inputs only (exclude checkboxes, radios, hidden, submit, button)
+    // Form — count visible data-entry inputs. Allow checkbox/radio-only forms if a submit is present.
     let input_count = dom.els.iter().filter(|e| {
         e.hidden != Some(true) && match e.tag.as_str() {
             "textarea" | "select" => true,
             "input" => !matches!(
                 e.input_type.as_deref(),
-                Some("checkbox") | Some("radio") | Some("hidden") | Some("submit") | Some("button") | Some("image")
+                Some("hidden") | Some("submit") | Some("button") | Some("image")
             ),
             _ => false,
         }
     }).count();
-    if input_count >= 2 {
+    let checkable_count = dom.els.iter().filter(|e| {
+        e.hidden != Some(true)
+            && e.tag == "input"
+            && matches!(e.input_type.as_deref(), Some("checkbox") | Some("radio"))
+    }).count();
+    let has_submit = dom.els.iter().any(|e| {
+        e.hidden != Some(true)
+            && (e.tag == "button"
+                || (e.tag == "input" && e.input_type.as_deref() == Some("submit")))
+    });
+    if input_count >= 2 || (checkable_count >= 2 && has_submit) {
         return PageType::Form;
     }
 
@@ -2123,8 +2133,8 @@ fn detect_contact_action(dom: &SpatialDom) -> Option<SuggestedAction> {
 /// Only fires for pages already classified as Form (2+ data-entry inputs) that
 /// don't match more specific form actions (Login, Register, Contact).
 fn detect_fill_form_action(dom: &SpatialDom, existing_actions: &[SuggestedAction]) -> Option<SuggestedAction> {
-    // Only for Form page types — don't generate FillForm on Login/Search pages
-    if dom.page_type != PageType::Form {
+    // Only for Form/Error page types — don't generate FillForm on Login/Search pages
+    if dom.page_type != PageType::Form && dom.page_type != PageType::Error {
         return None;
     }
 
@@ -2146,8 +2156,7 @@ fn detect_fill_form_action(dom: &SpatialDom, existing_actions: &[SuggestedAction
             "textarea" | "select" => true,
             "input" => !matches!(
                 e.input_type.as_deref(),
-                Some("checkbox") | Some("radio") | Some("hidden")
-                    | Some("submit") | Some("button") | Some("image")
+                Some("hidden") | Some("submit") | Some("button") | Some("image")
             ),
             _ => false,
         }

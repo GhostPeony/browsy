@@ -3,7 +3,17 @@
 
 mod session;
 
-pub use session::{Session, SessionConfig, SearchEngine, SearchResult, SearchPage, InputPurpose, extract_search_results_from, extract_google_results_from};
+pub use session::{
+    DomainMemory,
+    Session,
+    SessionConfig,
+    SearchEngine,
+    SearchResult,
+    SearchPage,
+    InputPurpose,
+    extract_search_results_from,
+    extract_google_results_from,
+};
 
 use crate::output::SpatialDom;
 use reqwest::blocking::Client;

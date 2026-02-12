@@ -88,6 +88,25 @@ pub struct Session {
     checked_ids: HashSet<u32>,
     unchecked_ids: HashSet<u32>,
     current_html: Option<String>,
+    domain_memory: HashMap<String, DomainMemory>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DomainMemory {
+    pub ok_count: u32,
+    pub blocked_count: u32,
+    pub error_count: u32,
+    pub last_outcome: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_reason: Option<String>,
+    pub last_seen_unix: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum DomainOutcome {
+    Ok,
+    Blocked,
+    Error,
 }
 
 impl Session {
@@ -127,6 +146,7 @@ impl Session {
             checked_ids: HashSet::new(),
             unchecked_ids: HashSet::new(),
             current_html: None,
+            domain_memory: HashMap::new(),
         })
     }
 
@@ -137,17 +157,38 @@ impl Session {
             return Err(FetchError::BlockedUrl(parsed_url.to_string()));
         }
 
-        let html = self.fetch_html_with_retry(&parsed_url)?;
+        let html = match self.fetch_html_with_retry(&parsed_url) {
+            Ok(h) => h,
+            Err(e) => {
+                self.record_domain_error(&parsed_url, &e);
+                return Err(e);
+            }
+        };
 
         let dom = self.load_html(&html, url)?;
         self.history.push(url.to_string());
         self.current_url = Some(parsed_url);
+        if let Some(url) = self.current_url.clone() {
+            self.update_domain_from_dom(&url, &dom);
+        }
 
         Ok(dom)
     }
 
     /// Load HTML content directly (without fetching).
     pub fn load_html(&mut self, html: &str, url: &str) -> Result<SpatialDom, FetchError> {
+        let result = self.parse_html_only(html, url)?;
+        self.previous_dom = self.current_dom.take();
+        self.current_dom = Some(result.clone());
+        self.current_html = Some(html.to_string());
+        self.form_values.clear();
+        self.checked_ids.clear();
+        self.unchecked_ids.clear();
+
+        Ok(result)
+    }
+
+    fn parse_html_only(&self, html: &str, url: &str) -> Result<SpatialDom, FetchError> {
         let dom_tree = crate::dom::parse_html(html);
 
         let external_css = if self.config.fetch_css {
@@ -187,16 +228,7 @@ impl Session {
         );
         spatial.url = url.to_string();
         crate::output::resolve_urls(&mut spatial, url);
-
-        let result = spatial.clone();
-        self.previous_dom = self.current_dom.take();
-        self.current_dom = Some(spatial);
-        self.current_html = Some(html.to_string());
-        self.form_values.clear();
-        self.checked_ids.clear();
-        self.unchecked_ids.clear();
-
-        Ok(result)
+        Ok(spatial)
     }
 
     /// Load from a pre-parsed DOM tree (used after JS actions modify the DOM).
@@ -602,9 +634,20 @@ impl Session {
         };
 
         let parsed_url = Url::parse(&url).map_err(|e| FetchError::InvalidUrl(e.to_string()))?;
-        let html = self.fetch_html_with_retry(&parsed_url)?;
+        let html = match self.fetch_html_with_retry(&parsed_url) {
+            Ok(h) => h,
+            Err(e) => {
+                self.record_domain_error(&parsed_url, &e);
+                return Err(e);
+            }
+        };
 
         let dom = crate::dom::parse_html(&html);
+        if let Ok(url_obj) = Url::parse(&url) {
+            // Use a lightweight parse to update domain memory without mutating session state.
+            let temp_dom = self.parse_html_only(&html, url_obj.as_str())?;
+            self.update_domain_from_dom(&url_obj, &temp_dom);
+        }
         match engine {
             SearchEngine::DuckDuckGo => Ok(extract_ddg_results(&dom)),
             SearchEngine::Google => Ok(extract_google_results(&dom)),
@@ -749,11 +792,82 @@ impl Session {
             return Err(FetchError::BlockedUrl(target_url.to_string()));
         }
 
-        let (new_url, html) = self.submit_with_retry(&target_url, &method, &form_data)?;
+        let (new_url, html) = match self.submit_with_retry(&target_url, &method, &form_data) {
+            Ok(v) => v,
+            Err(e) => {
+                self.record_domain_error(&target_url, &e);
+                return Err(e);
+            }
+        };
 
         self.history.push(new_url.clone());
         self.current_url = Some(Url::parse(&new_url).unwrap_or(target_url));
-        self.load_html(&html, &new_url)
+        let dom = self.load_html(&html, &new_url)?;
+        if let Some(url) = self.current_url.clone() {
+            self.update_domain_from_dom(&url, &dom);
+        }
+        Ok(dom)
+    }
+
+    pub fn domain_memory_for_current(&self) -> Option<DomainMemory> {
+        let url = self.current_url.as_ref()?;
+        let host = url.host_str()?;
+        self.domain_memory.get(host).cloned()
+    }
+
+    fn update_domain_from_dom(&mut self, url: &Url, dom: &SpatialDom) {
+        let outcome = if dom.blocked.is_some() || dom.page_type == PageType::Captcha {
+            DomainOutcome::Blocked
+        } else {
+            DomainOutcome::Ok
+        };
+        let reason = dom.blocked.as_ref().map(|b| b.reason.clone());
+        self.record_domain_outcome(url, outcome, reason);
+    }
+
+    fn record_domain_error(&mut self, url: &Url, err: &FetchError) {
+        let (outcome, reason) = match err {
+            FetchError::HttpError(code) if *code == 403 => (DomainOutcome::Blocked, Some("http_403".to_string())),
+            FetchError::HttpError(code) if *code == 429 => (DomainOutcome::Blocked, Some("http_429".to_string())),
+            FetchError::BlockedUrl(_) => (DomainOutcome::Blocked, Some("blocked_url".to_string())),
+            FetchError::Network(_) => (DomainOutcome::Error, Some("network_error".to_string())),
+            FetchError::ResponseTooLarge(_, _) => (DomainOutcome::Error, Some("response_too_large".to_string())),
+            FetchError::InvalidUrl(_) | FetchError::ActionError(_) | FetchError::HttpError(_) => {
+                (DomainOutcome::Error, Some("http_error".to_string()))
+            }
+        };
+        self.record_domain_outcome(url, outcome, reason);
+    }
+
+    fn record_domain_outcome(&mut self, url: &Url, outcome: DomainOutcome, reason: Option<String>) {
+        let host = match url.host_str() {
+            Some(h) => h.to_string(),
+            None => return,
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let entry = self.domain_memory.entry(host).or_insert(DomainMemory {
+            ok_count: 0,
+            blocked_count: 0,
+            error_count: 0,
+            last_outcome: "unknown".to_string(),
+            last_reason: None,
+            last_seen_unix: now,
+        });
+        match outcome {
+            DomainOutcome::Ok => entry.ok_count += 1,
+            DomainOutcome::Blocked => entry.blocked_count += 1,
+            DomainOutcome::Error => entry.error_count += 1,
+        }
+        entry.last_outcome = match outcome {
+            DomainOutcome::Ok => "ok",
+            DomainOutcome::Blocked => "blocked",
+            DomainOutcome::Error => "error",
+        }.to_string();
+        entry.last_reason = reason;
+        entry.last_seen_unix = now;
     }
 
     fn fetch_html_with_retry(&self, url: &Url) -> Result<String, FetchError> {
