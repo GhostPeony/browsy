@@ -1,8 +1,9 @@
 [package]
 name = "browsy-core"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
+readme = "README.md"
 description = "Zero-render browser engine for AI agents — browsy.dev"
 repository = "https://github.com/GhostPeony/browsy"
 homepage = "https://browsy.dev"

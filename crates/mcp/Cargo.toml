@@ -1,8 +1,9 @@
 [package]
 name = "browsy-mcp"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
+readme = "README.md"
 description = "MCP server for browsy — zero-render browser engine for AI agents"
 repository = "https://github.com/GhostPeony/browsy"
 homepage = "https://browsy.dev"
@@ -18,7 +19,7 @@ name = "browsy-mcp"
 path = "src/main.rs"
 
 [dependencies]
-browsy-core = { path = "../core" }
+browsy-core = { version = "0.1.1", path = "../core" }
 rmcp = { version = "0.15", features = ["server", "transport-io"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

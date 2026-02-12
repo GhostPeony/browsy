@@ -1,8 +1,9 @@
 [package]
 name = "browsy"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
+readme = "README.md"
 description = "Zero-render browser engine for AI agents — CLI"
 repository = "https://github.com/GhostPeony/browsy"
 homepage = "https://browsy.dev"
@@ -18,8 +19,8 @@ default = ["serve"]
 serve = ["dep:browsy-server", "dep:tokio", "dep:axum"]
 
 [dependencies]
-browsy-core = { path = "../core" }
-browsy-server = { path = "../server", optional = true }
+browsy-core = { version = "0.1.1", path = "../core" }
+browsy-server = { version = "0.1.1", path = "../server", optional = true }
 clap = { version = "4", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"], optional = true }
