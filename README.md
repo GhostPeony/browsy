@@ -1,4 +1,5 @@
 # browsy
+![browsy](https://github.com/user-attachments/assets/7b3984d9-14a0-4457-9949-427a2aff7686)
 
 **Zero-render browser engine for AI agents.**
 
