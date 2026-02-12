@@ -1,9 +1,10 @@
-//! Integration tests for A2A agent card discovery.
+//! Integration tests for A2A agent card discovery and task endpoints.
 
 use std::sync::Arc;
 
 use axum_test::TestServer;
 use browsy_server::{AppState, ServerConfig, build_router};
+use http::StatusCode;
 use serde_json::Value;
 
 fn test_server() -> TestServer {
@@ -98,4 +99,35 @@ async fn agent_card_skill_content() {
 
     let examples = skill["examples"].as_array().unwrap();
     assert_eq!(examples.len(), 3);
+}
+
+// ---------------------------------------------------------------------------
+// Task endpoint tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn task_invalid_id_returns_400() {
+    let server = test_server();
+
+    let response = server.get("/a2a/tasks/not-a-uuid").await;
+    response.assert_status(StatusCode::BAD_REQUEST);
+
+    let body: Value = response.json();
+    assert!(
+        body["error"].is_string(),
+        "error field should be present in response"
+    );
+}
+
+#[tokio::test]
+async fn task_valid_uuid_returns_unknown_status() {
+    let server = test_server();
+
+    let uuid = "550e8400-e29b-41d4-a716-446655440000";
+    let response = server.get(&format!("/a2a/tasks/{uuid}")).await;
+    response.assert_status_ok();
+
+    let body: Value = response.json();
+    assert_eq!(body["id"], uuid);
+    assert_eq!(body["status"], "unknown");
 }
