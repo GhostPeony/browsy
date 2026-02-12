@@ -1,9 +1,29 @@
-{
-  "date": "2026-02-12",
-  "mode": "playwright",
-  "instances": 10,
-  "iteration": 1,
-  "wall_ms": 2497,
-  "peak_working_set_mb_total_tree": 0.0,
-  "url": "https://httpbin.org/forms/post"
-}
+[
+  {
+    "date": "2026-02-12",
+    "mode": "playwright",
+    "instances": 10,
+    "iteration": 1,
+    "wall_ms": 2688,
+    "peak_working_set_mb_total_tree": 0.0,
+    "url": "https://httpbin.org/forms/post"
+  },
+  {
+    "date": "2026-02-12",
+    "mode": "playwright",
+    "instances": 10,
+    "iteration": 2,
+    "wall_ms": 1822,
+    "peak_working_set_mb_total_tree": 0.0,
+    "url": "https://httpbin.org/forms/post"
+  },
+  {
+    "date": "2026-02-12",
+    "mode": "playwright",
+    "instances": 10,
+    "iteration": 3,
+    "wall_ms": 2105,
+    "peak_working_set_mb_total_tree": 0.0,
+    "url": "https://httpbin.org/forms/post"
+  }
+]

@@ -1,2 +1,4 @@
 "date","mode","instances","iteration","wall_ms","peak_working_set_mb_total","peak_working_set_mb_avg","peak_working_set_mb_total_tree","peak_working_set_mb_avg_tree","url"
-"2026-02-12","agent-browser","5","1","10515","312.33","62.47","0","0","https://httpbin.org/forms/post"
+"2026-02-12","agent-browser","5","1","11545","312.34","62.47","0","0","https://httpbin.org/forms/post"
+"2026-02-12","agent-browser","5","2","11877","312.74","62.55","0","0","https://httpbin.org/forms/post"
+"2026-02-12","agent-browser","5","3","12041","312.62","62.52","0","0","https://httpbin.org/forms/post"

@@ -1,2 +1,4 @@
 "date","mode","instances","iteration","wall_ms","peak_working_set_mb_total_tree","url"
-"2026-02-12","playwright","10","1","2497","0","https://httpbin.org/forms/post"
+"2026-02-12","playwright","10","1","2688","0","https://httpbin.org/forms/post"
+"2026-02-12","playwright","10","2","1822","0","https://httpbin.org/forms/post"
+"2026-02-12","playwright","10","3","2105","0","https://httpbin.org/forms/post"

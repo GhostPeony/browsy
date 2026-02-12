@@ -1,13 +1,41 @@
-{
-  "date": "2026-02-12",
-  "mode": "parse",
-  "instances": 5,
-  "iteration": 1,
-  "wall_ms": 1030,
-  "peak_working_set_mb_total": 58.64,
-  "peak_working_set_mb_avg": 29.32,
-  "peak_working_set_mb_total_tree": 58.64,
-  "peak_working_set_mb_avg_tree": 29.32,
-  "input_html": "C:\\\\Users\\\\Cade\\\\Projects\\\\agentbrowser\\\\crates\\\\core\\\\tests\\\\corpus\\\\snapshots\\\\wikipedia-rust.html",
-  "url": ""
-}
+[
+  {
+    "date": "2026-02-12",
+    "mode": "parse",
+    "instances": 5,
+    "iteration": 1,
+    "wall_ms": 1026,
+    "peak_working_set_mb_total": 57.9,
+    "peak_working_set_mb_avg": 28.95,
+    "peak_working_set_mb_total_tree": 57.9,
+    "peak_working_set_mb_avg_tree": 28.95,
+    "input_html": "C:\\Users\\Cade\\Projects\\agentbrowser\\crates\\core\\tests\\corpus\\snapshots\\wikipedia-rust.html",
+    "url": ""
+  },
+  {
+    "date": "2026-02-12",
+    "mode": "parse",
+    "instances": 5,
+    "iteration": 2,
+    "wall_ms": 903,
+    "peak_working_set_mb_total": 32.84,
+    "peak_working_set_mb_avg": 16.42,
+    "peak_working_set_mb_total_tree": 32.84,
+    "peak_working_set_mb_avg_tree": 16.42,
+    "input_html": "C:\\Users\\Cade\\Projects\\agentbrowser\\crates\\core\\tests\\corpus\\snapshots\\wikipedia-rust.html",
+    "url": ""
+  },
+  {
+    "date": "2026-02-12",
+    "mode": "parse",
+    "instances": 5,
+    "iteration": 3,
+    "wall_ms": 997,
+    "peak_working_set_mb_total": 33.88,
+    "peak_working_set_mb_avg": 16.94,
+    "peak_working_set_mb_total_tree": 33.88,
+    "peak_working_set_mb_avg_tree": 16.94,
+    "input_html": "C:\\Users\\Cade\\Projects\\agentbrowser\\crates\\core\\tests\\corpus\\snapshots\\wikipedia-rust.html",
+    "url": ""
+  }
+]

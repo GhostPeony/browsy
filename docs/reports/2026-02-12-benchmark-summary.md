@@ -1,0 +1,21 @@
+# Benchmark Summary (2026-02-12)
+
+Generated from: C:\Users\Cade\Projects\agentbrowser\benchmark\manifest.json
+Iterations: 3
+Instances: 1,5,10
+
+| Benchmark | Instances | Avg wall (ms) |
+| --- | ---: | ---: |
+| browsy-parse | 1 | 823.67 |
+| browsy-fetch | 1 | 849.67 |
+| agent-browser | 1 | 7339.67 |
+| playwright | 1 | 1752 |
+| browsy-parse | 5 | 1030.67 |
+| browsy-fetch | 5 | 1068.33 |
+| agent-browser | 5 | 16408.67 |
+| playwright | 5 | 2214.67 |
+| browsy-parse | 10 | 1468 |
+| browsy-fetch | 10 | 1250.33 |
+| agent-browser | 10 | 25207 |
+| playwright | 10 | 2205 |
+

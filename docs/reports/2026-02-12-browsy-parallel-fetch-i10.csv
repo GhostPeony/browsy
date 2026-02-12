@@ -1,2 +1,4 @@
 "date","mode","instances","iteration","wall_ms","peak_working_set_mb_total","peak_working_set_mb_avg","peak_working_set_mb_total_tree","peak_working_set_mb_avg_tree","input_html","url"
-"2026-02-12","fetch","10","1","1862","32.57","8.14","32.57","8.14","","https://httpbin.org/forms/post"
+"2026-02-12","fetch","10","1","1624","33.44","8.36","33.44","8.36","","https://httpbin.org/forms/post"
+"2026-02-12","fetch","10","2","1892","24.64","8.21","24.64","8.21","","https://httpbin.org/forms/post"
+"2026-02-12","fetch","10","3","2011","44.07","8.81","44.07","8.81","","https://httpbin.org/forms/post"

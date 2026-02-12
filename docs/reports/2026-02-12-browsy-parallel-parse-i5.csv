@@ -1,2 +1,4 @@
 "date","mode","instances","iteration","wall_ms","peak_working_set_mb_total","peak_working_set_mb_avg","peak_working_set_mb_total_tree","peak_working_set_mb_avg_tree","input_html","url"
-"2026-02-12","parse","5","1","1030","58.64","29.32","58.64","29.32","C:\\Users\\Cade\\Projects\\agentbrowser\\crates\\core\\tests\\corpus\\snapshots\\wikipedia-rust.html",""
+"2026-02-12","parse","5","1","1026","57.9","28.95","57.9","28.95","C:\Users\Cade\Projects\agentbrowser\crates\core\tests\corpus\snapshots\wikipedia-rust.html",""
+"2026-02-12","parse","5","2","903","32.84","16.42","32.84","16.42","C:\Users\Cade\Projects\agentbrowser\crates\core\tests\corpus\snapshots\wikipedia-rust.html",""
+"2026-02-12","parse","5","3","997","33.88","16.94","33.88","16.94","C:\Users\Cade\Projects\agentbrowser\crates\core\tests\corpus\snapshots\wikipedia-rust.html",""

@@ -1,12 +1,38 @@
-{
-  "date": "2026-02-12",
-  "mode": "agent-browser",
-  "instances": 10,
-  "iteration": 1,
-  "wall_ms": 19487,
-  "peak_working_set_mb_total": 627.02,
-  "peak_working_set_mb_avg": 62.7,
-  "peak_working_set_mb_total_tree": 0.0,
-  "peak_working_set_mb_avg_tree": 0.0,
-  "url": "https://httpbin.org/forms/post"
-}
+[
+  {
+    "date": "2026-02-12",
+    "mode": "agent-browser",
+    "instances": 10,
+    "iteration": 1,
+    "wall_ms": 23994,
+    "peak_working_set_mb_total": 625.42,
+    "peak_working_set_mb_avg": 62.54,
+    "peak_working_set_mb_total_tree": 0.0,
+    "peak_working_set_mb_avg_tree": 0.0,
+    "url": "https://httpbin.org/forms/post"
+  },
+  {
+    "date": "2026-02-12",
+    "mode": "agent-browser",
+    "instances": 10,
+    "iteration": 2,
+    "wall_ms": 27560,
+    "peak_working_set_mb_total": 622.92,
+    "peak_working_set_mb_avg": 62.29,
+    "peak_working_set_mb_total_tree": 0.0,
+    "peak_working_set_mb_avg_tree": 0.0,
+    "url": "https://httpbin.org/forms/post"
+  },
+  {
+    "date": "2026-02-12",
+    "mode": "agent-browser",
+    "instances": 10,
+    "iteration": 3,
+    "wall_ms": 24067,
+    "peak_working_set_mb_total": 627.26,
+    "peak_working_set_mb_avg": 62.73,
+    "peak_working_set_mb_total_tree": 0.0,
+    "peak_working_set_mb_avg_tree": 0.0,
+    "url": "https://httpbin.org/forms/post"
+  }
+]

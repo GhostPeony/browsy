@@ -1,0 +1,15 @@
+SITE|MS|LINES|CHARS|STATUS|NOTE
+https://news.ycombinator.com|230|388|21834|OK|
+https://github.com/login|1234|56|2631|WARN|slow_fetch_or_parse
+https://accounts.google.com|2892|294|9370|WARN|slow_fetch_or_parse
+https://duckduckgo.com|926|177|7086|OK|
+https://en.wikipedia.org/wiki/Main_Page|1225|3|50|NEEDS_HUMAN|likely_blocked_or_empty
+https://www.bbc.com/news|415|427|32887|OK|
+https://stackoverflow.com/questions|1017|2|24|NEEDS_HUMAN|fetch_error
+https://craigslist.org|929|690|33804|OK|
+https://github.com/anthropics/claude-code|2410|522|27910|WARN|slow_fetch_or_parse
+https://www.amazon.com|119|6|59|NEEDS_HUMAN|likely_blocked_or_empty
+https://news.ycombinator.com/login|137|21|596|OK|
+https://httpbin.org/forms/post|376|31|966|OK|
+https://example.com|106|9|268|NEEDS_HUMAN|likely_blocked_or_empty
+https://www.python.org|123|6|59|NEEDS_HUMAN|likely_blocked_or_empty
