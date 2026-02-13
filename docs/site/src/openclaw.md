@@ -12,13 +12,13 @@ OpenClaw's built-in browser uses Playwright + CDP: ~300MB RAM, 2-5s per page. br
 | **Memory** | ~300MB/page | ~5MB/page |
 | **Latency** | 2-5s/page | <100ms/page |
 | **JS support** | Full | Hidden content exposure |
-| **Setup** | Bundled | `npm install @openclaw/browsy` + browsy CLI |
+| **Setup** | Bundled | `npm install openclaw-browsy` + browsy CLI |
 
 ## Installation
 
 ```bash
 # Install the OpenClaw plugin
-npm install @openclaw/browsy
+npm install openclaw-browsy
 
 # Install the browsy CLI (needed for the server)
 cargo install browsy
@@ -31,7 +31,7 @@ Add to your OpenClaw config:
 ```json
 {
   "plugins": {
-    "@openclaw/browsy": {
+    "openclaw-browsy": {
       "port": 3847,
       "autoStart": true,
       "allowPrivateNetwork": false,
@@ -54,7 +54,7 @@ Add to your OpenClaw config:
 
 ```typescript
 // openclaw.config.ts
-import { register } from "@openclaw/browsy";
+import { register } from "openclaw-browsy";
 export default { register };
 ```
 
@@ -104,18 +104,18 @@ Each agent gets its own isolated session with independent cookies, history, and 
 
 ## SimpleClaw and other OpenClaw-compatible frameworks
 
-The `@openclaw/browsy` plugin works with any framework that implements the OpenClaw plugin API. This includes [SimpleClaw](https://simpleclaw.dev) and other lightweight agent orchestrators built on the OpenClaw standard.
+The `openclaw-browsy` plugin works with any framework that implements the OpenClaw plugin API. This includes [SimpleClaw](https://simpleclaw.dev) and other lightweight agent orchestrators built on the OpenClaw standard.
 
 ### SimpleClaw quick start
 
 ```typescript
 import { SimpleClaw } from "simpleclaw";
-import { register } from "@openclaw/browsy";
+import { register } from "openclaw-browsy";
 
 const claw = new SimpleClaw({
   plugins: [{ register }],
   config: {
-    "@openclaw/browsy": {
+    "openclaw-browsy": {
       port: 3847,
       preferBrowsy: true,
     },
@@ -136,7 +136,7 @@ const result = await agent.run("Search for 'Rust web frameworks' and summarize t
 You can also use the browsy client directly without OpenClaw:
 
 ```typescript
-import { BrowsyContext } from "@openclaw/browsy";
+import { BrowsyContext } from "openclaw-browsy";
 
 const ctx = new BrowsyContext({ port: 3847, autoStart: false });
 
@@ -177,7 +177,7 @@ To disable interception and run browsy alongside the built-in browser:
 
 ```json
 {
-  "@openclaw/browsy": {
+  "openclaw-browsy": {
     "preferBrowsy": false
   }
 }

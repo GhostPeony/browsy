@@ -353,14 +353,14 @@ tool = BrowsyTool(browser=browser)
 
 ## OpenClaw / SimpleClaw
 
-The `@openclaw/browsy` plugin integrates browsy as a first-class tool in [OpenClaw](https://openclaw.dev) and compatible frameworks like [SimpleClaw](https://simpleclaw.dev). Unlike the Python integrations above, this is a TypeScript/Node.js plugin that manages its own browsy server process.
+The `openclaw-browsy` plugin integrates browsy as a first-class tool in [OpenClaw](https://openclaw.dev) and compatible frameworks like [SimpleClaw](https://simpleclaw.dev). Unlike the Python integrations above, this is a TypeScript/Node.js plugin that manages its own browsy server process.
 
 ```bash
-npm install @openclaw/browsy
+npm install openclaw-browsy
 ```
 
 ```typescript
-import { register } from "@openclaw/browsy";
+import { register } from "openclaw-browsy";
 export default { register };
 ```
 

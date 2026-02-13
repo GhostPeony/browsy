@@ -255,10 +255,10 @@ tools = get_tools()  # -> [BrowsyBrowseTool, BrowsyClickTool, ...]
 
 **OpenClaw / SimpleClaw (TypeScript):**
 ```bash
-npm install @openclaw/browsy
+npm install openclaw-browsy
 ```
 ```typescript
-import { register } from "@openclaw/browsy";
+import { register } from "openclaw-browsy";
 export default { register };
 // Agents automatically get 14 browsy tools — browse, click, type, search, login, etc.
 ```
