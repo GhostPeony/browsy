@@ -423,7 +423,14 @@ impl ServerHandler for BrowsyServer {
                 "browsy: zero-render browser for AI agents. Use browse to navigate, \
                  then interact with elements by ID. Elements are listed with [id:tag \"text\"] format. \
                  Size hints (narrow/wide/full) appear on form elements. \
-                 Position (@top, @mid-L, etc.) appears only to disambiguate duplicate elements."
+                 Position (@top, @mid-L, etc.) appears only to disambiguate duplicate elements.\n\n\
+                 WHEN TO USE BROWSY vs WebFetch: browsy is for interactive browsing — \
+                 filling forms, logging in, clicking through pages, reading page structure, \
+                 extracting tables, and multi-step navigation with session/cookie persistence. \
+                 Do NOT use browsy as a replacement for WebFetch. If you just need to read \
+                 content from a URL (fetching docs, reading an article, checking an API response), \
+                 use WebFetch instead. Use browsy when you need to interact with a page or \
+                 understand its structure (form fields, buttons, page type detection)."
                     .to_string(),
             ),
             capabilities: ServerCapabilities::builder().enable_tools().build(),
