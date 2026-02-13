@@ -1,6 +1,6 @@
 # browsy-ai
 
-Zero-render browser SDK for AI agents. Browse, interact with, and extract data from web pages without launching a browser.
+Zero-render browser SDK for AI agents. Browse, interact with, and extract data from web pages without launching a browser. [browsy.dev](https://browsy.dev)
 
 browsy converts HTML into a **Spatial DOM** — a flat list of interactive elements with bounding boxes, roles, and states — at a fraction of the cost and latency of screenshot-based automation.
 
